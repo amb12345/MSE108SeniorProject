@@ -70,24 +70,84 @@
         </div>
       </section>
 
-      <section class="table-card">
-        <div class="table-header">
-          <h2>Filtered telemetry record</h2>
-          <p>Showing the row that matches the selected t value.</p>
+      <section class="tabs">
+        <div class="tab-list" role="tablist" aria-label="Telemetry data views">
+          <button
+            class="tab-button is-active"
+            role="tab"
+            aria-selected="true"
+            aria-controls="tab-telemetry"
+            id="telemetry-tab"
+            data-tab-target="tab-telemetry"
+          >
+            Route telemetry
+          </button>
+          <button
+            class="tab-button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="tab-sensors"
+            id="sensor-tab"
+            data-tab-target="tab-sensors"
+          >
+            Reefer sensors
+          </button>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>t</th>
-              <th>truck_id</th>
-              <th>timestamp</th>
-              <th>latitude</th>
-              <th>longitude</th>
-              <th>speed (mph)</th>
-            </tr>
-          </thead>
-          <tbody id="tableBody"></tbody>
-        </table>
+
+        <div
+          id="tab-telemetry"
+          class="tab-panel is-active"
+          role="tabpanel"
+          aria-labelledby="telemetry-tab"
+          data-tab-panel
+        >
+          <section class="table-card">
+            <div class="table-header">
+              <h2>Filtered telemetry record</h2>
+              <p>Showing the row that matches the selected t value.</p>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>t</th>
+                  <th>truck_id</th>
+                  <th>timestamp</th>
+                  <th>latitude</th>
+                  <th>longitude</th>
+                  <th>speed (mph)</th>
+                </tr>
+              </thead>
+              <tbody id="tableBody"></tbody>
+            </table>
+          </section>
+        </div>
+
+        <div
+          id="tab-sensors"
+          class="tab-panel"
+          role="tabpanel"
+          aria-labelledby="sensor-tab"
+          data-tab-panel
+          hidden
+        >
+          <section class="table-card">
+            <div class="table-header">
+              <h2>Reefer sensor readings</h2>
+              <p>Temperature and humidity samples for truck 1.</p>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>truck_id</th>
+                  <th>timestamp</th>
+                  <th>temperature_f</th>
+                  <th>humidity_pct</th>
+                </tr>
+              </thead>
+              <tbody id="sensorTableBody"></tbody>
+            </table>
+          </section>
+        </div>
       </section>
     </div>
 

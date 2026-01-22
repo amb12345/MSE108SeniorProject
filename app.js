@@ -377,6 +377,291 @@ const telemetryData = [
   },
 ];
 
+const sensorData = [
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T08:00:00Z",
+    temperature_f: 18,
+    humidity_pct: 65,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T08:05:00Z",
+    temperature_f: 17,
+    humidity_pct: 66,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T08:10:00Z",
+    temperature_f: 18,
+    humidity_pct: 65,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T08:15:00Z",
+    temperature_f: 17,
+    humidity_pct: 67,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T08:20:00Z",
+    temperature_f: 16,
+    humidity_pct: 68,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T08:25:00Z",
+    temperature_f: 17,
+    humidity_pct: 66,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T08:30:00Z",
+    temperature_f: 18,
+    humidity_pct: 65,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T08:35:00Z",
+    temperature_f: 17,
+    humidity_pct: 66,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T08:40:00Z",
+    temperature_f: 18,
+    humidity_pct: 64,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T08:45:00Z",
+    temperature_f: 17,
+    humidity_pct: 65,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T08:50:00Z",
+    temperature_f: 18,
+    humidity_pct: 66,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T08:55:00Z",
+    temperature_f: 17,
+    humidity_pct: 67,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T09:00:00Z",
+    temperature_f: 18,
+    humidity_pct: 65,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T09:05:00Z",
+    temperature_f: 19,
+    humidity_pct: 70,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T09:10:00Z",
+    temperature_f: 18,
+    humidity_pct: 68,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T09:15:00Z",
+    temperature_f: 19,
+    humidity_pct: 69,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T09:20:00Z",
+    temperature_f: 18,
+    humidity_pct: 67,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T09:25:00Z",
+    temperature_f: 18,
+    humidity_pct: 66,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T09:30:00Z",
+    temperature_f: 17,
+    humidity_pct: 65,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T09:35:00Z",
+    temperature_f: 18,
+    humidity_pct: 66,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T09:40:00Z",
+    temperature_f: 33,
+    humidity_pct: 92,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T09:45:00Z",
+    temperature_f: 34,
+    humidity_pct: 93,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T09:50:00Z",
+    temperature_f: 18,
+    humidity_pct: 70,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T09:55:00Z",
+    temperature_f: 17,
+    humidity_pct: 69,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T10:00:00Z",
+    temperature_f: 18,
+    humidity_pct: 68,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T10:05:00Z",
+    temperature_f: 19,
+    humidity_pct: 69,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T10:10:00Z",
+    temperature_f: 18,
+    humidity_pct: 68,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T10:15:00Z",
+    temperature_f: 17,
+    humidity_pct: 67,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T10:20:00Z",
+    temperature_f: 18,
+    humidity_pct: 66,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T10:25:00Z",
+    temperature_f: 17,
+    humidity_pct: 65,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T10:30:00Z",
+    temperature_f: 18,
+    humidity_pct: 66,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T10:35:00Z",
+    temperature_f: 19,
+    humidity_pct: 67,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T10:40:00Z",
+    temperature_f: 18,
+    humidity_pct: 66,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T10:45:00Z",
+    temperature_f: 17,
+    humidity_pct: 65,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T10:50:00Z",
+    temperature_f: 18,
+    humidity_pct: 66,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T10:55:00Z",
+    temperature_f: 17,
+    humidity_pct: 65,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T11:00:00Z",
+    temperature_f: 18,
+    humidity_pct: 66,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T11:05:00Z",
+    temperature_f: 19,
+    humidity_pct: 68,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T11:10:00Z",
+    temperature_f: 18,
+    humidity_pct: 67,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T11:15:00Z",
+    temperature_f: 17,
+    humidity_pct: 66,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T11:20:00Z",
+    temperature_f: 18,
+    humidity_pct: 67,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T11:25:00Z",
+    temperature_f: 17,
+    humidity_pct: 66,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T11:30:00Z",
+    temperature_f: 18,
+    humidity_pct: 67,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T11:35:00Z",
+    temperature_f: 19,
+    humidity_pct: 69,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T11:40:00Z",
+    temperature_f: 18,
+    humidity_pct: 68,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T11:45:00Z",
+    temperature_f: 17,
+    humidity_pct: 67,
+  },
+  {
+    truck_id: 1,
+    timestamp: "2026-01-21T11:50:00Z",
+    temperature_f: 18,
+    humidity_pct: 66,
+  },
+];
+
 const elements = {
   truckId: document.getElementById("truckId"),
   totalRecords: document.getElementById("totalRecords"),
@@ -392,6 +677,9 @@ const elements = {
   longitude: document.getElementById("longitude"),
   locationSummary: document.getElementById("locationSummary"),
   tableBody: document.getElementById("tableBody"),
+  sensorTableBody: document.getElementById("sensorTableBody"),
+  tabButtons: Array.from(document.querySelectorAll("[data-tab-target]")),
+  tabPanels: Array.from(document.querySelectorAll("[data-tab-panel]")),
 };
 
 const tValues = telemetryData.map((point) => point.t);
@@ -420,6 +708,64 @@ function getSpeedStatus(speed) {
 
 function formatCoordinate(value) {
   return value.toFixed(4);
+}
+
+function renderSensorTable() {
+  if (!elements.sensorTableBody) {
+    return;
+  }
+
+  if (!sensorData.length) {
+    elements.sensorTableBody.innerHTML =
+      '<tr><td colspan="4">No sensor data available.</td></tr>';
+    return;
+  }
+
+  elements.sensorTableBody.innerHTML = sensorData
+    .map(
+      (record) => `
+        <tr>
+          <td>${record.truck_id}</td>
+          <td>${record.timestamp}</td>
+          <td>${record.temperature_f}</td>
+          <td>${record.humidity_pct}</td>
+        </tr>
+      `
+    )
+    .join("");
+}
+
+function setActiveTab(tabId) {
+  if (!tabId) {
+    return;
+  }
+
+  elements.tabButtons.forEach((button) => {
+    const isActive = button.dataset.tabTarget === tabId;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
+  });
+
+  elements.tabPanels.forEach((panel) => {
+    const isActive = panel.id === tabId;
+    panel.classList.toggle("is-active", isActive);
+    panel.hidden = !isActive;
+  });
+}
+
+function initializeTabs() {
+  if (!elements.tabButtons.length || !elements.tabPanels.length) {
+    return;
+  }
+
+  elements.tabButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      setActiveTab(button.dataset.tabTarget);
+    });
+  });
+
+  const defaultTab = elements.tabButtons[0].dataset.tabTarget;
+  setActiveTab(defaultTab);
 }
 
 function renderSelectedPoint(tValue) {
@@ -481,6 +827,8 @@ function initializeDashboard() {
     updateSelection(event.target.value);
   });
 
+  renderSensorTable();
+  initializeTabs();
   updateSelection(minT);
 }
 
