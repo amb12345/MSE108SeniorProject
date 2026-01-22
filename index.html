@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Frozen Food Distribution Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Frozen food distribution</p>
+          <h1>Fleet Telemetry Dashboard</h1>
+          <p class="subtitle">
+            Filter by t to inspect a single GPS point from the route.
+          </p>
+        </div>
+        <div class="summary">
+          <div class="summary-item">
+            <span class="label">Truck</span>
+            <span id="truckId">-</span>
+          </div>
+          <div class="summary-item">
+            <span class="label">Total records</span>
+            <span id="totalRecords">-</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="filters">
+        <div class="card">
+          <label for="tRange">Filter by t</label>
+          <input type="range" id="tRange" step="1" />
+          <div class="range-values">
+            <span id="tMin">-</span>
+            <span class="range-current">t = <span id="tCurrent">-</span></span>
+            <span id="tMax">-</span>
+          </div>
+        </div>
+        <div class="card">
+          <label for="tNumber">Jump to t</label>
+          <input type="number" id="tNumber" step="1" />
+          <small class="hint">Use arrow keys to step by 1.</small>
+        </div>
+        <div class="card">
+          <label>Timestamp (UTC)</label>
+          <div id="timestamp" class="metric">-</div>
+          <small class="hint">Telemetry point time stamp.</small>
+        </div>
+      </section>
+
+      <section class="kpis">
+        <div class="kpi">
+          <span class="label">Speed</span>
+          <span id="speed" class="value">-</span>
+          <span id="speedStatus" class="status">-</span>
+        </div>
+        <div class="kpi">
+          <span class="label">Latitude</span>
+          <span id="latitude" class="value">-</span>
+        </div>
+        <div class="kpi">
+          <span class="label">Longitude</span>
+          <span id="longitude" class="value">-</span>
+        </div>
+        <div class="kpi">
+          <span class="label">Location summary</span>
+          <span id="locationSummary" class="value">-</span>
+        </div>
+      </section>
+
+      <section class="table-card">
+        <div class="table-header">
+          <h2>Filtered telemetry record</h2>
+          <p>Showing the row that matches the selected t value.</p>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>t</th>
+              <th>truck_id</th>
+              <th>timestamp</th>
+              <th>latitude</th>
+              <th>longitude</th>
+              <th>speed (mph)</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </section>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
