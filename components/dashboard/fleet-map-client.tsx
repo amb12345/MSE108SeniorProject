@@ -88,7 +88,7 @@ const createTruckIcon = (status: keyof typeof statusConfig) => {
     `,
     iconSize: [40, 40],
     iconAnchor: [20, 20],
-    popupAnchor: [0, -20],
+    popupAnchor: [0, -30],
   })
 }
 
