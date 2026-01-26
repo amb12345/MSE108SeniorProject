@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { FleetMap } from "./fleet-map"
-import { Route, Clock, Ruler, Fuel, Leaf, DollarSign, AlertTriangle, Zap, ArrowRight, ArrowDown, CheckCircle2, MapPin } from "lucide-react"
+import { Route, Clock, Ruler, Fuel, Leaf, DollarSign, AlertTriangle, Zap, ArrowRight, ArrowDown, CheckCircle2, MapPin, Truck } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const locations = [
@@ -69,11 +69,17 @@ const routeOptions = [
   },
 ]
 
+const availableTrucks = [
+  { id: "T1", name: "Truck 1", driver: "John Smith", status: "available" },
+  { id: "T2", name: "Truck 2", driver: "Sarah Johnson", status: "available" },
+  { id: "T3", name: "Truck 3", driver: "Mike Davis", status: "available" },
+  { id: "T4", name: "Truck 4", driver: "Emily Brown", status: "available" },
+]
+
 const pastRoutes = [
-  { id: "R001", from: "Chicago", to: "Denver", date: "Jan 18", time: "7h 32m", distance: "498 mi", status: "completed" },
-  { id: "R002", from: "Dallas", to: "Houston", date: "Jan 17", time: "3h 45m", distance: "239 mi", status: "completed" },
-  { id: "R003", from: "LA", to: "Phoenix", date: "Jan 16", time: "5h 12m", distance: "372 mi", status: "completed" },
-  { id: "R004", from: "NY", to: "Philadelphia", date: "Jan 15", time: "1h 58m", distance: "95 mi", status: "completed" },
+  { id: "R001", from: "Chicago", to: "Denver", date: "Jan 18", time: "7h 32m", distance: "498 mi", status: "completed" as const, truck: "Truck 1", progress: 100 },
+  { id: "R002", from: "Dallas", to: "Houston", date: "Jan 17", time: "3h 45m", distance: "239 mi", status: "in-progress" as const, truck: "Truck 2", progress: 65 },
+  { id: "R003", from: "LA", to: "Phoenix", date: "Jan 16", time: "5h 12m", distance: "372 mi", status: "queued" as const, truck: "Truck 3", progress: 0 },
 ]
 
 const routePoints = [
@@ -88,6 +94,31 @@ export function RouteAnalytics() {
   const [fromLocation, setFromLocation] = useState("New York, NY")
   const [toLocation, setToLocation] = useState("Los Angeles, CA")
   const [selectedOption, setSelectedOption] = useState("fastest")
+  const [selectedTruck, setSelectedTruck] = useState("")
+  const [recentRoutes, setRecentRoutes] = useState(pastRoutes)
+
+  const handleAssignRoute = () => {
+    const selectedRouteOption = routeOptions.find(opt => opt.id === selectedOption)
+    if (!selectedRouteOption || !selectedTruck) return
+
+    const truck = availableTrucks.find(t => t.id === selectedTruck)
+    if (!truck) return
+
+    const newRoute = {
+      id: `R${String(recentRoutes.length + 1).padStart(3, '0')}`,
+      from: fromLocation.split(',')[0],
+      to: toLocation.split(',')[0],
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      time: selectedRouteOption.time,
+      distance: selectedRouteOption.distance,
+      status: "queued" as const,
+      truck: truck.name,
+      progress: 0,
+    }
+
+    setRecentRoutes([newRoute, ...recentRoutes])
+    setSelectedTruck("")
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -243,7 +274,7 @@ export function RouteAnalytics() {
                   </div>
                   
                   {/* Stats */}
-                  <div className="space-y-3">
+                  <div className="space-y-3 mb-4">
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
                         <Clock className="h-3.5 w-3.5" />
@@ -290,6 +321,38 @@ export function RouteAnalytics() {
                       </Badge>
                     </div>
                   </div>
+
+                  {/* Assign Route Section */}
+                  {isSelected && (
+                    <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                      <Select value={selectedTruck} onValueChange={setSelectedTruck}>
+                        <SelectTrigger className="w-full h-8 text-xs">
+                          <SelectValue placeholder="Select truck..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableTrucks.map((truck) => (
+                            <SelectItem key={truck.id} value={truck.id}>
+                              <div className="flex items-center gap-2">
+                                <Truck className="h-3 w-3" />
+                                {truck.name} - {truck.driver}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleAssignRoute()
+                        }}
+                        disabled={!selectedTruck}
+                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 text-xs h-8 disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                        Assign Route
+                      </Button>
+                    </div>
+                  )}
                 </button>
               )
             })}
@@ -297,48 +360,94 @@ export function RouteAnalytics() {
         </CardContent>
       </Card>
 
-      {/* Recent Routes */}
+      {/* Route Queue & Recent Routes */}
       <Card className="border-border shadow-sm">
         <CardHeader className="pb-4">
-          <CardTitle className="text-lg font-semibold">Recent Routes</CardTitle>
+          <CardTitle className="text-lg font-semibold">Route Queue & Recent</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {pastRoutes.map((route, index) => (
+            {recentRoutes.map((route, index) => (
               <div
                 key={route.id}
-                className="flex flex-col gap-4 rounded-xl bg-muted/30 p-4 transition-colors hover:bg-muted/50 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-4 rounded-xl bg-muted/30 p-4 transition-colors hover:bg-muted/50"
                 style={{ animationDelay: `${index * 0.05}s` }}
               >
-                <div className="flex items-center gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-                    <Route className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-foreground">{route.from}</p>
-                      <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                      <p className="font-semibold text-foreground">{route.to}</p>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className={cn(
+                      "flex h-12 w-12 items-center justify-center rounded-xl",
+                      route.status === "completed" && "bg-success/10",
+                      route.status === "in-progress" && "bg-primary/10",
+                      route.status === "queued" && "bg-warning/10"
+                    )}>
+                      <Route className={cn(
+                        "h-6 w-6",
+                        route.status === "completed" && "text-success",
+                        route.status === "in-progress" && "text-primary",
+                        route.status === "queued" && "text-warning"
+                      )} />
                     </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-sm text-muted-foreground">{route.date}</span>
-                      <Badge variant="outline" className="text-xs bg-success/10 text-success border-success/30">
-                        <CheckCircle2 className="mr-1 h-3 w-3" />
-                        Completed
-                      </Badge>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-foreground">{route.from}</p>
+                        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+                        <p className="font-semibold text-foreground">{route.to}</p>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="text-sm text-muted-foreground">{route.date}</span>
+                        <Badge 
+                          variant="outline" 
+                          className={cn(
+                            "text-xs",
+                            route.status === "completed" && "bg-success/10 text-success border-success/30",
+                            route.status === "in-progress" && "bg-primary/10 text-primary border-primary/30",
+                            route.status === "queued" && "bg-warning/10 text-warning border-warning/30"
+                          )}
+                        >
+                          {route.status === "completed" && <CheckCircle2 className="mr-1 h-3 w-3" />}
+                          {route.status === "completed" && "Completed"}
+                          {route.status === "in-progress" && "In Progress"}
+                          {route.status === "queued" && "Queued"}
+                        </Badge>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Truck className="h-3 w-3" />
+                          {route.truck}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-8">
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground">Duration</p>
+                      <p className="font-semibold text-foreground">{route.time}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs text-muted-foreground">Distance</p>
+                      <p className="font-semibold text-foreground">{route.distance}</p>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-8">
-                  <div className="text-center">
-                    <p className="text-xs text-muted-foreground">Duration</p>
-                    <p className="font-semibold text-foreground">{route.time}</p>
+                
+                {/* Progress Bar */}
+                {route.status !== "completed" && (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground">Progress to Destination</span>
+                      <span className="font-medium text-foreground">{route.progress}%</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                      <div 
+                        className={cn(
+                          "h-full rounded-full transition-all duration-500",
+                          route.status === "in-progress" && "bg-primary",
+                          route.status === "queued" && "bg-warning"
+                        )}
+                        style={{ width: `${route.progress}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="text-center">
-                    <p className="text-xs text-muted-foreground">Distance</p>
-                    <p className="font-semibold text-foreground">{route.distance}</p>
-                  </div>
-                </div>
+                )}
               </div>
             ))}
           </div>

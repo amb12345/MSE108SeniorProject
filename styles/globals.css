@@ -325,22 +325,86 @@
 /* Leaflet map fixes */
 .leaflet-container {
   font-family: var(--font-sans);
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  cursor: grab;
+}
+
+.leaflet-container:active {
+  cursor: grabbing;
 }
 
 .leaflet-popup-content-wrapper {
   @apply bg-card text-card-foreground rounded-lg shadow-lg border border-border;
+  margin: 0 !important;
 }
 
 .leaflet-popup-content {
-  margin: 0;
+  margin: 0 !important;
 }
 
 .leaflet-popup-tip {
-  @apply bg-card border-border;
+  display: none !important;
 }
 
-.custom-truck-marker:hover {
-  transform: scale(1.1) !important;
+.leaflet-popup {
+  margin: 0 !important;
+}
+
+.custom-truck-marker {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+.custom-truck-marker > div {
+  pointer-events: auto !important;
+}
+
+.custom-truck-marker:hover > div {
+  filter: brightness(1.15);
+  box-shadow: 0 6px 16px -2px rgba(0, 0, 0, 0.4) !important;
+}
+
+.custom-truck-marker:active > div {
+  filter: brightness(1.05);
+}
+
+/* Prevent map jank and layout shifts */
+.leaflet-map-pane {
+  will-change: transform;
+  transform: translate3d(0px, 0px, 0px);
+}
+
+.leaflet-tile-container {
+  will-change: transform;
+}
+
+.leaflet-zoom-animated {
+  will-change: transform;
+}
+
+.leaflet-marker-icon {
+  transition: none !important;
+}
+
+/* Ensure markers are interactive but follow the map */
+.leaflet-marker-pane {
+  pointer-events: none;
+  z-index: 600;
+}
+
+.leaflet-marker-pane .leaflet-marker-icon {
+  pointer-events: auto;
+  position: absolute;
+}
+
+.leaflet-popup-pane {
+  pointer-events: none;
+}
+
+.leaflet-popup {
+  pointer-events: auto;
 }
 
 /* Fix Leaflet default icon paths */

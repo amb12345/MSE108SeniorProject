@@ -415,19 +415,21 @@ export function Overview() {
                     interval={2}
                   />
                   <YAxis hide />
-                  <RechartsTooltip 
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      fontSize: '11px',
-                    }}
-                    labelStyle={{
-                      fontSize: '11px',
-                      color: 'hsl(var(--foreground))'
-                    }}
-                    formatter={(value: number) => [`${value.toFixed(1)}x`, 'SROI']}
-                  />
+                <RechartsTooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--card))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '8px',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                  }}
+                  labelStyle={{
+                    fontSize: '11px',
+                    color: 'hsl(var(--foreground))',
+                    fontWeight: 'bold',
+                  }}
+                  formatter={(value: number) => [`${value.toFixed(1)}x`, 'SROI']}
+                />
                   <Area 
                     type="monotone" 
                     dataKey="value" 

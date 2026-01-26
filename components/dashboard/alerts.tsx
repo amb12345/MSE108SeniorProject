@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,7 @@ interface Alert {
   truck: string
   time: string
   acknowledged: boolean
+  autoResolved?: boolean
 }
 
 // Generate alerts from sensor data anomalies
@@ -153,6 +154,70 @@ export function Alerts() {
   const [alerts, setAlerts] = useState(alertsData)
   const [filter, setFilter] = useState<string>("all")
 
+  // Auto-resolve alerts when conditions normalize
+  useEffect(() => {
+    const checkAndResolveAlerts = () => {
+      setAlerts((prevAlerts) =>
+        prevAlerts.map((alert) => {
+          // Skip already acknowledged alerts
+          if (alert.acknowledged) return alert
+
+          // Get truck ID from alert
+          const truckId = parseInt(alert.truck.replace('Truck ', ''))
+          
+          // Get latest sensor and telemetry data for this truck
+          const latestSensor = sensorData
+            .filter(s => s.truck_id === truckId)
+            .slice(-1)[0]
+          const latestTelemetry = telemetryData
+            .filter(t => t.truck_id === truckId)
+            .slice(-1)[0]
+
+          if (!latestSensor && !latestTelemetry) return alert
+
+          // Check if temperature anomaly has normalized
+          if (alert.message.includes('Temperature spike')) {
+            const prevSensors = sensorData.filter(s => s.truck_id === truckId)
+            if (prevSensors.length >= 2) {
+              const currentTemp = prevSensors[prevSensors.length - 1].temperature_f
+              const prevTemp = prevSensors[prevSensors.length - 2].temperature_f
+              const tempChange = Math.abs(currentTemp - prevTemp)
+              
+              // Auto-resolve if temperature stabilized (change < 5°F)
+              if (tempChange < 5) {
+                return { ...alert, acknowledged: true, type: "success" as const, autoResolved: true }
+              }
+            }
+          }
+
+          // Check if humidity has normalized
+          if (alert.message.includes('High humidity') && latestSensor) {
+            // Auto-resolve if humidity dropped below 85%
+            if (latestSensor.humidity_pct <= 85) {
+              return { ...alert, acknowledged: true, type: "success" as const, autoResolved: true }
+            }
+          }
+
+          // Check if speed has normalized
+          if (alert.message.includes('Sudden speed drop') && latestTelemetry) {
+            // Auto-resolve if speed is back above 20 mph
+            if (latestTelemetry.speed > 20) {
+              return { ...alert, acknowledged: true, type: "success" as const, autoResolved: true }
+            }
+          }
+
+          return alert
+        })
+      )
+    }
+
+    // Check on mount and every 5 seconds
+    checkAndResolveAlerts()
+    const interval = setInterval(checkAndResolveAlerts, 5000)
+    
+    return () => clearInterval(interval)
+  }, [])
+
   const filteredAlerts = alerts.filter((alert) => {
     if (filter === "all") return true
     if (filter === "unacknowledged") return !alert.acknowledged
@@ -162,7 +227,7 @@ export function Alerts() {
   const handleAcknowledge = (id: string) => {
     setAlerts((prev) =>
       prev.map((alert) =>
-        alert.id === id ? { ...alert, acknowledged: true } : alert
+        alert.id === id ? { ...alert, acknowledged: true, type: "success" as const } : alert
       )
     )
   }
@@ -343,7 +408,7 @@ export function Alerts() {
                         {alert.acknowledged && (
                           <Badge variant="outline" className="bg-success/10 text-success border-success/30">
                             <CheckCircle className="mr-1 h-3 w-3" />
-                            Resolved
+                            {alert.autoResolved ? "Auto-Resolved" : "Acknowledged"}
                           </Badge>
                         )}
                       </div>
