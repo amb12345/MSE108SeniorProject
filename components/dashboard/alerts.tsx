@@ -6,9 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { AlertTriangle, CheckCircle, XCircle, Clock, Bell, Filter, Truck, AlertCircle, Info } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { sensorData, telemetryData } from "@/lib/data"
 import { useFleetData } from "@/hooks/use-fleet-data"
-import { DATA_SOURCE } from "@/lib/use-data-source"
 
 interface Alert {
   id: string
@@ -27,7 +25,7 @@ const generateAlertsFromData = (dbData?: any[]): Alert[] => {
   let alertId = 1
 
   // Use database data if available
-  if (DATA_SOURCE === 'database' && dbData && Array.isArray(dbData)) {
+  if (dbData && Array.isArray(dbData)) {
     dbData.forEach((truck: any) => {
       const sensor = truck.sensor
       const gps = truck.gps
@@ -35,9 +33,9 @@ const generateAlertsFromData = (dbData?: any[]): Alert[] => {
 
       const timeAgo = getTimeAgo(sensor.timestamp)
       const truckId = truck.truck_id
-      const tempF = sensor.temperature_c // Actually stored as Fahrenheit
+      const tempF = sensor.temperature_c
+      const humidityPct = parseFloat(sensor.humidity_pct) || 0
 
-      // Critical: Temperature above 64.4°F
       if (tempF > 64.4) {
         alerts.push({
           id: `A${String(alertId++).padStart(3, '0')}`,
@@ -50,25 +48,23 @@ const generateAlertsFromData = (dbData?: any[]): Alert[] => {
         })
       }
 
-      // Critical: Humidity >= 90%
-      if (sensor.humidity_pct >= 90) {
+      if (humidityPct >= 90) {
         alerts.push({
           id: `A${String(alertId++).padStart(3, '0')}`,
           type: "critical",
           title: "Critical Humidity Level",
-          message: `Humidity at ${sensor.humidity_pct.toFixed(1)}% - critical threshold reached.`,
+          message: `Humidity at ${humidityPct.toFixed(1)}% - critical threshold reached.`,
           truck: `Truck ${truckId}`,
           time: timeAgo,
           acknowledged: false,
         })
       }
-      // Warning: Humidity >= 80%
-      else if (sensor.humidity_pct >= 80) {
+      else if (humidityPct >= 80) {
         alerts.push({
           id: `A${String(alertId++).padStart(3, '0')}`,
           type: "warning",
           title: "High Humidity Warning",
-          message: `Humidity at ${sensor.humidity_pct.toFixed(1)}% - above 80% threshold.`,
+          message: `Humidity at ${humidityPct.toFixed(1)}% - above 80% threshold.`,
           truck: `Truck ${truckId}`,
           time: timeAgo,
           acknowledged: false,
@@ -99,63 +95,6 @@ const generateAlertsFromData = (dbData?: any[]): Alert[] => {
           time: timeAgo,
           acknowledged: true,
         })
-      }
-    })
-  } else {
-    // Fall back to mock data
-    sensorData.forEach((sensor, index) => {
-      if (index === 0) return
-
-      const prevSensor = sensorData[index - 1]
-      const tempChange = Math.abs(sensor.temperature_f - prevSensor.temperature_f)
-
-      // Critical: Temperature spike
-      if (tempChange > 15 && sensor.temperature_f > 25) {
-        const timeAgo = getTimeAgo(sensor.timestamp)
-        alerts.push({
-          id: `A${String(alertId++).padStart(3, '0')}`,
-          type: "critical",
-          title: "Temperature Anomaly Detected",
-          message: `Temperature spike to ${sensor.temperature_f}°F (${tempChange.toFixed(1)}°F increase) with ${sensor.humidity_pct}% humidity.`,
-          truck: `Truck ${sensor.truck_id}`,
-          time: timeAgo,
-          acknowledged: false,
-        })
-      }
-
-      // Warning: High humidity (> 90%)
-      if (sensor.humidity_pct > 90 && !alerts.some(a => a.truck === `Truck ${sensor.truck_id}` && a.type === "warning" && a.message.includes("High humidity"))) {
-        const timeAgo = getTimeAgo(sensor.timestamp)
-        alerts.push({
-          id: `A${String(alertId++).padStart(3, '0')}`,
-          type: "warning",
-          title: "High Humidity Alert",
-          message: `Humidity at ${sensor.humidity_pct}% - above recommended threshold.`,
-          truck: `Truck ${sensor.truck_id}`,
-          time: timeAgo,
-          acknowledged: false,
-        })
-      }
-    })
-
-    telemetryData.forEach((telemetry, index) => {
-      if (index === 0) return
-
-      const prevTelemetry = telemetryData[index - 1]
-      
-      if (prevTelemetry.speed > 50 && telemetry.speed < 10 && prevTelemetry.truck_id === telemetry.truck_id) {
-        const timeAgo = getTimeAgo(telemetry.timestamp)
-        if (!alerts.some(a => a.truck === `Truck ${telemetry.truck_id}` && a.message.includes("Sudden speed drop"))) {
-          alerts.push({
-            id: `A${String(alertId++).padStart(3, '0')}`,
-            type: "warning",
-            title: "Sudden Speed Drop",
-            message: `Speed dropped from ${prevTelemetry.speed} mph to ${telemetry.speed} mph.`,
-            truck: `Truck ${telemetry.truck_id}`,
-            time: timeAgo,
-            acknowledged: false,
-          })
-        }
       }
     })
   }
@@ -217,18 +156,15 @@ export function Alerts() {
   
   // Generate initial alerts
   const initialAlerts = useMemo(() => {
-    if (DATA_SOURCE === 'database' && dbFleetData) {
-      return generateAlertsFromData(dbFleetData)
-    }
-    return generateAlertsFromData()
+    return generateAlertsFromData(dbFleetData ? (Array.isArray(dbFleetData) ? dbFleetData : [dbFleetData]) : undefined)
   }, [dbFleetData])
   
   const [alerts, setAlerts] = useState<Alert[]>(initialAlerts)
   
   // Update alerts when data changes
   useEffect(() => {
-    if (DATA_SOURCE === 'database' && dbFleetData) {
-      setAlerts(generateAlertsFromData(dbFleetData))
+    if (dbFleetData) {
+      setAlerts(generateAlertsFromData(Array.isArray(dbFleetData) ? dbFleetData : [dbFleetData]))
     }
   }, [dbFleetData])
 
@@ -243,64 +179,27 @@ export function Alerts() {
           // Get truck ID from alert
           const truckId = parseInt(alert.truck.replace('Truck ', ''))
           
-          if (DATA_SOURCE === 'database' && dbFleetData && Array.isArray(dbFleetData)) {
+          if (dbFleetData && Array.isArray(dbFleetData)) {
             const truck = dbFleetData.find((t: any) => t.truck_id === truckId)
             if (!truck?.sensor) return alert
             
             const sensor = truck.sensor
+            const humidityPct = parseFloat(sensor.humidity_pct) || 0
             
-            // Check if temperature has normalized (below 64.4°F)
             if (alert.message.includes('Temperature') && sensor.temperature_c <= 64.4) {
               return { ...alert, acknowledged: true, type: "success" as const, autoResolved: true }
             }
 
-            // Check if humidity has normalized
-            if (alert.message.includes('Critical Humidity') && sensor.humidity_pct < 90) {
+            if (alert.message.includes('Critical Humidity') && humidityPct < 90) {
               return { ...alert, acknowledged: true, type: "success" as const, autoResolved: true }
             }
             
-            if (alert.message.includes('High Humidity Warning') && sensor.humidity_pct < 80) {
+            if (alert.message.includes('High Humidity Warning') && humidityPct < 80) {
               return { ...alert, acknowledged: true, type: "success" as const, autoResolved: true }
             }
 
-            // Check if door closed
             if (alert.message.includes('Door') && !sensor.door_open) {
               return { ...alert, acknowledged: true, type: "success" as const, autoResolved: true }
-            }
-          } else {
-            // Fall back to mock data logic
-            const latestSensor = sensorData
-              .filter(s => s.truck_id === truckId)
-              .slice(-1)[0]
-            const latestTelemetry = telemetryData
-              .filter(t => t.truck_id === truckId)
-              .slice(-1)[0]
-
-            if (!latestSensor && !latestTelemetry) return alert
-
-            if (alert.message.includes('Temperature spike')) {
-              const prevSensors = sensorData.filter(s => s.truck_id === truckId)
-              if (prevSensors.length >= 2) {
-                const currentTemp = prevSensors[prevSensors.length - 1].temperature_f
-                const prevTemp = prevSensors[prevSensors.length - 2].temperature_f
-                const tempChange = Math.abs(currentTemp - prevTemp)
-                
-                if (tempChange < 5) {
-                  return { ...alert, acknowledged: true, type: "success" as const, autoResolved: true }
-                }
-              }
-            }
-
-            if (alert.message.includes('High humidity') && latestSensor) {
-              if (latestSensor.humidity_pct <= 85) {
-                return { ...alert, acknowledged: true, type: "success" as const, autoResolved: true }
-              }
-            }
-
-            if (alert.message.includes('Sudden speed drop') && latestTelemetry) {
-              if (latestTelemetry.speed > 20) {
-                return { ...alert, acknowledged: true, type: "success" as const, autoResolved: true }
-              }
             }
           }
 

@@ -4,11 +4,9 @@ import { useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 import { Truck, AlertTriangle, TrendingUp, TrendingDown, Thermometer, Droplets, Activity, Gauge, DollarSign, TrendingUp as TrendingUpIcon } from "lucide-react"
-import { telemetryData, sensorData } from "@/lib/data"
 import { FleetMap } from "./fleet-map"
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar } from "recharts"
 import { useFleetData, useFleetStats } from "@/hooks/use-fleet-data"
-import { DATA_SOURCE } from "@/lib/use-data-source"
 
 interface OverviewProps {
   onNavigate?: (tab: string) => void
@@ -24,10 +22,12 @@ export function Overview({ onNavigate }: OverviewProps) {
     const alerts: Array<{ type: string; title: string; truck: string }> = []
     
     // Use database data if available
-    if (DATA_SOURCE === 'database' && dbFleetData && Array.isArray(dbFleetData)) {
+    if (dbFleetData && Array.isArray(dbFleetData)) {
       dbFleetData.forEach((truck: any) => {
         const sensor = truck.sensor
         if (!sensor) return
+        
+        const humidityPct = parseFloat(sensor.humidity_pct) || 0
         
         // Temperature alerts (> 64.4°F)
         if (sensor.temperature_c > 64.4) {
@@ -39,16 +39,16 @@ export function Overview({ onNavigate }: OverviewProps) {
         }
         
         // Humidity alerts
-        if (sensor.humidity_pct >= 90) {
+        if (humidityPct >= 90) {
           alerts.push({
             type: "critical",
-            title: `Critical Humidity: ${sensor.humidity_pct.toFixed(1)}%`,
+            title: `Critical Humidity: ${humidityPct.toFixed(1)}%`,
             truck: `Truck ${truck.truck_id}`,
           })
-        } else if (sensor.humidity_pct >= 80) {
+        } else if (humidityPct >= 80) {
           alerts.push({
             type: "warning",
-            title: `High Humidity: ${sensor.humidity_pct.toFixed(1)}%`,
+            title: `High Humidity: ${humidityPct.toFixed(1)}%`,
             truck: `Truck ${truck.truck_id}`,
           })
         }
@@ -72,42 +72,6 @@ export function Overview({ onNavigate }: OverviewProps) {
           })
         }
       })
-    } else {
-      // Fall back to mock data
-      sensorData.forEach((sensor, index) => {
-        if (index === 0) return
-        const prevSensor = sensorData[index - 1]
-        const tempChange = Math.abs(sensor.temperature_f - prevSensor.temperature_f)
-        
-        if (tempChange > 15 && sensor.temperature_f > 25) {
-          alerts.push({
-            type: "critical",
-            title: "Temperature Anomaly",
-            truck: `Truck ${sensor.truck_id}`,
-          })
-        }
-        
-        if (sensor.humidity_pct > 90) {
-          alerts.push({
-            type: "warning",
-            title: "High Humidity",
-            truck: `Truck ${sensor.truck_id}`,
-          })
-        }
-      })
-      
-      telemetryData.forEach((telemetry, index) => {
-        if (index === 0) return
-        const prevTelemetry = telemetryData[index - 1]
-        
-        if (prevTelemetry.speed > 50 && telemetry.speed < 10 && prevTelemetry.truck_id === telemetry.truck_id) {
-          alerts.push({
-            type: "warning",
-            title: "Sudden Speed Drop",
-            truck: `Truck ${telemetry.truck_id}`,
-          })
-        }
-      })
     }
     
     // Group by type
@@ -119,8 +83,7 @@ export function Overview({ onNavigate }: OverviewProps) {
 
   // Calculate statistics from real data
   const stats = useMemo(() => {
-    // Use database data if available
-    if (DATA_SOURCE === 'database' && dbFleetData && Array.isArray(dbFleetData) && dbStats) {
+    if (dbFleetData && Array.isArray(dbFleetData) && dbStats) {
       const totalTrucks = dbStats.counts.trucks
       
       // Calculate route status based on decision data
@@ -151,14 +114,12 @@ export function Overview({ onNavigate }: OverviewProps) {
       const detourTruckIds = detourTrucks.map((t: any) => t.truck_id)
       const completedTruckIds = completedTrucks.map((t: any) => t.truck_id)
       
-      // Count critical humidity alerts (>= 90%)
       const criticalHumidityAlerts = dbFleetData.filter((truck: any) => 
-        truck.sensor && truck.sensor.humidity_pct >= 90
+        truck.sensor && parseFloat(truck.sensor.humidity_pct) >= 90
       ).length
       
-      // Count warning humidity alerts (>= 80% but < 90%)
       const warningHumidityAlerts = dbFleetData.filter((truck: any) => 
-        truck.sensor && truck.sensor.humidity_pct >= 80 && truck.sensor.humidity_pct < 90
+        truck.sensor && parseFloat(truck.sensor.humidity_pct) >= 80 && parseFloat(truck.sensor.humidity_pct) < 90
       ).length
       
       const highHumidityAlerts = criticalHumidityAlerts + warningHumidityAlerts
@@ -199,81 +160,14 @@ export function Overview({ onNavigate }: OverviewProps) {
       }
     }
     
-    // Fall back to mock data
-    const uniqueTrucks = new Set(telemetryData.map(t => t.truck_id))
-    const totalTrucks = uniqueTrucks.size
-    const totalRecords = telemetryData.length
-    
-    const speeds = telemetryData.map(t => t.speed).filter(s => s > 0)
-    const avgSpeed = speeds.length > 0 ? speeds.reduce((a, b) => a + b, 0) / speeds.length : 0
-    
-    const activeTrucks = new Set(
-      telemetryData.filter(t => t.speed > 0).map(t => t.truck_id)
-    ).size
-    
-    const idleTrucks = new Set(
-      telemetryData.filter(t => t.speed === 0).map(t => t.truck_id)
-    ).size
-    
-    const temps = sensorData.map(s => s.temperature_f)
-    const avgTemp = temps.reduce((a, b) => a + b, 0) / temps.length
-    const maxTemp = Math.max(...temps)
-    const minTemp = Math.min(...temps)
-    
-    const tempAnomalies = sensorData.filter((s, i) => {
-      if (i === 0) return false
-      const prev = sensorData[i - 1]
-      return Math.abs(s.temperature_f - prev.temperature_f) > 15 && s.temperature_f > 25
-    }).length
-    
-    const highHumidityAlerts = sensorData.filter(s => s.humidity_pct > 90).length
-    
-    let completedRoutes = 0
-    let activeRoutes = 0
-    let detourRoutes = 0
-    const allTruckIds = Array.from(uniqueTrucks)
-    let completedTruckIds: number[] = []
-    let activeTruckIds: number[] = []
-    let detourTruckIds: number[] = []
-    
-    if (totalTrucks === 1) {
-      activeRoutes = 1
-      activeTruckIds = allTruckIds
-    } else if (totalTrucks >= 2) {
-      completedRoutes = Math.floor(totalTrucks * 0.4)
-      activeRoutes = Math.floor(totalTrucks * 0.5)
-      detourRoutes = totalTrucks - completedRoutes - activeRoutes
-      completedTruckIds = allTruckIds.slice(0, completedRoutes)
-      activeTruckIds = allTruckIds.slice(completedRoutes, completedRoutes + activeRoutes)
-      detourTruckIds = allTruckIds.slice(completedRoutes + activeRoutes)
-    }
-    
-    // Split humidity alerts for mock data
-    const criticalHumidityAlerts = sensorData.filter(s => s.humidity_pct >= 90).length
-    const warningHumidityAlerts = sensorData.filter(s => s.humidity_pct >= 80 && s.humidity_pct < 90).length
-    
+    // Loading state — no data yet
     return {
-      totalTrucks,
-      totalRecords,
-      avgSpeed: Math.round(avgSpeed),
-      activeTrucks,
-      idleTrucks,
-      avgTemp: Math.round(avgTemp),
-      maxTemp,
-      minTemp,
-      tempAnomalies,
-      highHumidityAlerts,
-      criticalHumidityAlerts,
-      warningHumidityAlerts,
-      totalAlerts: tempAnomalies + highHumidityAlerts,
-      completedRoutes,
-      activeRoutes,
-      detourRoutes,
-      inProgressRoutes: activeRoutes + detourRoutes,
-      completedTruckIds,
-      activeTruckIds,
-      detourTruckIds,
-      inProgressTruckIds: [...activeTruckIds, ...detourTruckIds],
+      totalTrucks: 0, totalRecords: 0, avgSpeed: 0, activeTrucks: 0, idleTrucks: 0,
+      avgTemp: 0, maxTemp: 0, minTemp: 0, tempAnomalies: 0, highHumidityAlerts: 0,
+      criticalHumidityAlerts: 0, warningHumidityAlerts: 0, totalAlerts: 0,
+      completedRoutes: 0, activeRoutes: 0, detourRoutes: 0, inProgressRoutes: 0,
+      completedTruckIds: [] as number[], activeTruckIds: [] as number[],
+      detourTruckIds: [] as number[], inProgressTruckIds: [] as number[],
     }
   }, [dbFleetData, dbStats])
 
@@ -300,19 +194,19 @@ export function Overview({ onNavigate }: OverviewProps) {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
-        {DATA_SOURCE === 'database' && (fleetLoading || statsLoading) && (
+        {(fleetLoading || statsLoading) && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            Loading real-time data...
+            Loading data...
           </div>
         )}
-        {DATA_SOURCE === 'database' && !fleetLoading && !statsLoading && (
+        {!fleetLoading && !statsLoading && dbFleetData && (
           <div className="flex items-center gap-2 text-sm text-success">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
             </span>
-            Connected to Database
+            Data Loaded
           </div>
         )}
       </div>
@@ -553,7 +447,7 @@ export function Overview({ onNavigate }: OverviewProps) {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
               </span>
-              {DATA_SOURCE === 'database' && !statsLoading ? 'Live from DB' : 'Live telemetry'}
+              Live telemetry
             </div>
           </CardContent>
         </Card>

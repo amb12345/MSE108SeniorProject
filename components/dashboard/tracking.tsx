@@ -11,7 +11,6 @@ import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip as Recharts
 import { telemetryData, sensorData } from "@/lib/data"
 import { cn } from "@/lib/utils"
 import { useFleetData } from "@/hooks/use-fleet-data"
-import { DATA_SOURCE } from "@/lib/use-data-source"
 
 // Transform telemetry data for chart
 const getChartData = () => {
@@ -43,7 +42,7 @@ export function Tracking() {
   
   // Transform database trucks into UI format
   const trucksData = useMemo(() => {
-    if (DATA_SOURCE === 'database' && dbFleetData && Array.isArray(dbFleetData)) {
+    if (dbFleetData && Array.isArray(dbFleetData)) {
       return dbFleetData.map((truck: any) => {
         // Determine status based on GPS and decision data
         let status: 'active' | 'transit' | 'idle' = 'active'
@@ -74,7 +73,7 @@ export function Tracking() {
           speed: truck.gps?.speed_mph || 0,
           fuel: 75, // Mock for now
           temperature: truck.sensor?.temperature_c || 0,
-          humidity: truck.sensor?.humidity_pct || 0,
+          humidity: parseFloat(truck.sensor?.humidity_pct) || 0,
           odometer: 0,
           deliveries: { completed: 0, pending: 0 },
           gps: truck.gps,
@@ -130,7 +129,7 @@ export function Tracking() {
   // Get current telemetry from database or mock
   const currentTelemetry = useMemo(() => {
     if (!selectedTruck) return telemetryData[0]
-    if (DATA_SOURCE === 'database' && selectedTruck.gps) {
+    if (selectedTruck.gps) {
       return {
         t: 0,
         truck_id: selectedTruck.truck_id,
@@ -146,7 +145,7 @@ export function Tracking() {
   // Get corresponding sensor data
   const currentSensor = useMemo(() => {
     if (!selectedTruck) return sensorData[0]
-    if (DATA_SOURCE === 'database' && selectedTruck.sensor) {
+    if (selectedTruck.sensor) {
       return selectedTruck.sensor
     }
     return sensorData.find(s => s.timestamp === currentTelemetry.timestamp && s.truck_id === currentTelemetry.truck_id)
@@ -154,16 +153,16 @@ export function Tracking() {
   
   // Generate alerts from database data
   const alerts = useMemo(() => {
-    if (DATA_SOURCE === 'database' && dbFleetData && Array.isArray(dbFleetData)) {
+    if (dbFleetData && Array.isArray(dbFleetData)) {
       const alertList: Array<{type: 'critical' | 'warning', message: string}> = []
       
       dbFleetData.forEach((truck: any) => {
         if (!truck.sensor) return
         
         const truckId = truck.truck_id
-        const tempF = truck.sensor.temperature_c // Actually in Fahrenheit
+        const tempF = truck.sensor.temperature_c
+        const humidityPct = parseFloat(truck.sensor.humidity_pct) || 0
         
-        // Temperature alerts (> 64.4°F)
         if (tempF > 64.4) {
           alertList.push({
             type: 'critical',
@@ -171,22 +170,19 @@ export function Tracking() {
           })
         }
         
-        // Critical humidity (>= 90%)
-        if (truck.sensor.humidity_pct >= 90) {
+        if (humidityPct >= 90) {
           alertList.push({
             type: 'critical',
-            message: `Critical humidity (${truck.sensor.humidity_pct.toFixed(1)}%) - Truck ${truckId}`
+            message: `Critical humidity (${humidityPct.toFixed(1)}%) - Truck ${truckId}`
           })
         }
-        // Warning humidity (>= 80%)
-        else if (truck.sensor.humidity_pct >= 80) {
+        else if (humidityPct >= 80) {
           alertList.push({
             type: 'warning',
-            message: `High humidity (${truck.sensor.humidity_pct.toFixed(1)}%) - Truck ${truckId}`
+            message: `High humidity (${humidityPct.toFixed(1)}%) - Truck ${truckId}`
           })
         }
         
-        // Door open
         if (truck.sensor.door_open) {
           alertList.push({
             type: 'warning',
@@ -198,12 +194,7 @@ export function Tracking() {
       return alertList
     }
     
-    // Fallback mock alerts
-    return [
-      { type: 'critical' as const, message: 'Temperature spike detected - Truck 1' },
-      { type: 'warning' as const, message: 'High humidity alert - Truck 1' },
-      { type: 'warning' as const, message: 'Speed drop detected - Truck 1' },
-    ]
+    return []
   }, [dbFleetData])
 
   // Update truck data with real telemetry
@@ -220,7 +211,7 @@ export function Tracking() {
         driverPhone: "",
       }
     }
-    if (DATA_SOURCE === 'database') {
+    if (selectedTruck.gps || selectedTruck.sensor) {
       return selectedTruck
     }
     return {
@@ -274,7 +265,7 @@ export function Tracking() {
             <CardTitle className="text-base font-semibold">Fleet Vehicles</CardTitle>
             <p className="text-xs text-muted-foreground">
               {trucksData.length} Total
-              {DATA_SOURCE === 'database' && !loading && (
+              {!loading && dbFleetData && (
                 <span className="ml-2 text-success">● Live</span>
               )}
             </p>
@@ -460,7 +451,7 @@ export function Tracking() {
             </div>
             <div className="rounded-lg bg-info/10 p-3 text-center">
               <Droplets className="h-5 w-5 mx-auto text-info mb-1" />
-              <p className="text-xl font-bold text-foreground">{(currentSensor?.humidity_pct || 0).toFixed(1)}%</p>
+              <p className="text-xl font-bold text-foreground">{(parseFloat(currentSensor?.humidity_pct) || 0).toFixed(1)}%</p>
               <p className="text-[10px] text-muted-foreground">Humidity</p>
             </div>
           </div>

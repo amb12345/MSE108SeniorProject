@@ -9,7 +9,6 @@ import { FleetMap } from "./fleet-map"
 import { Route, Clock, Ruler, Fuel, Leaf, DollarSign, AlertTriangle, Zap, ArrowRight, ArrowDown, CheckCircle2, MapPin, Truck } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useFleetData } from "@/hooks/use-fleet-data"
-import { DATA_SOURCE } from "@/lib/use-data-source"
 
 const locations = [
   "New York, NY",
@@ -104,7 +103,7 @@ export function RouteAnalytics() {
   
   // Transform database trucks into available trucks format
   const availableTrucks = useMemo(() => {
-    if (DATA_SOURCE === 'database' && dbFleetData && Array.isArray(dbFleetData)) {
+    if (dbFleetData && Array.isArray(dbFleetData)) {
       return dbFleetData.map((truck: any) => ({
         id: `T${truck.truck_id}`,
         name: `Truck ${truck.truck_id}`,
@@ -118,7 +117,7 @@ export function RouteAnalytics() {
   
   // Generate route history from database
   const routeHistory = useMemo(() => {
-    if (DATA_SOURCE === 'database' && dbFleetData && Array.isArray(dbFleetData)) {
+    if (dbFleetData && Array.isArray(dbFleetData)) {
       return dbFleetData.slice(0, 10).map((truck: any, index: number) => {
         const isCompleted = truck.gps?.at_node === true
         const isMoving = truck.gps?.speed_mph > 0
@@ -420,7 +419,7 @@ export function RouteAnalytics() {
           <CardTitle className="text-lg font-semibold">Route Queue & Recent</CardTitle>
         </CardHeader>
         <CardContent>
-          {DATA_SOURCE === 'database' && !loading && (
+          {!loading && dbFleetData && (
             <div className="mb-3 flex items-center gap-2 text-sm">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
