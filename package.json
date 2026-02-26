@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "generate:static": "ts-node scripts/generate-static-data.ts",
+    "generate:static": "node scripts/generate-static-data.mjs",
     "build:static": "npm run generate:static && NEXT_PUBLIC_BUILD_MODE=static next build",
     "dev": "next dev -p 3001 --hostname localhost",
     "dev:db": "next dev -p 3001 --hostname localhost",
