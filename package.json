@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "NEXT_PUBLIC_BUILD_MODE=static next build",
+    "build": "next build",
     "build:static": "NEXT_PUBLIC_BUILD_MODE=static next build",
     "dev": "next dev -p 3001 --hostname localhost",
     "dev:db": "next dev -p 3001 --hostname localhost",
