@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import Image from "next/image"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -10,31 +10,8 @@ import { Truck, User, Fuel, Gauge, Thermometer, MapPin, Clock, Package, Droplets
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts"
 import { telemetryData, sensorData } from "@/lib/data"
 import { cn } from "@/lib/utils"
-
-// Generate truck data from telemetry
-const trucksData = [
-  {
-    id: "T1",
-    name: "Truck 1",
-    make: "Volvo",
-    model: "FH16",
-    year: 2022,
-    licensePlate: "TRK-0001",
-    driver: "John Smith",
-    driverPhone: "(555) 123-4567",
-    driverEmail: "john.smith@ibm.com",
-    driverImage: null,
-    status: "active" as const,
-    currentLocation: "Chicago Area",
-    destination: "Milwaukee, WI",
-    eta: "2h 15m",
-    speed: 0,
-    fuel: 78,
-    temperature: 0,
-    odometer: 45672,
-    deliveries: { completed: 156, pending: 3 },
-  },
-]
+import { useFleetData } from "@/hooks/use-fleet-data"
+import { DATA_SOURCE } from "@/lib/use-data-source"
 
 // Transform telemetry data for chart
 const getChartData = () => {
@@ -57,32 +34,199 @@ const statusConfig = {
 }
 
 export function Tracking() {
-  const [selectedTruck, setSelectedTruck] = useState(trucksData[0])
+  const [selectedTruck, setSelectedTruck] = useState<any>(null)
   const [selectedTValue, setSelectedTValue] = useState(1)
   const [showAlerts, setShowAlerts] = useState(false)
+  
+  // Fetch database fleet data
+  const { data: dbFleetData, loading } = useFleetData(undefined, 60000)
+  
+  // Transform database trucks into UI format
+  const trucksData = useMemo(() => {
+    if (DATA_SOURCE === 'database' && dbFleetData && Array.isArray(dbFleetData)) {
+      return dbFleetData.map((truck: any) => {
+        // Determine status based on GPS and decision data
+        let status: 'active' | 'transit' | 'idle' = 'active'
+        if (truck.gps?.at_node === true) {
+          status = 'idle' // Completed/at destination
+        } else if (truck.gps?.speed_mph > 0) {
+          status = 'transit'
+        } else {
+          status = 'idle'
+        }
+        
+        return {
+          id: `T${truck.truck_id}`,
+          truck_id: truck.truck_id,
+          name: `Truck ${truck.truck_id}`,
+          make: "Fleet Vehicle",
+          model: "Standard",
+          year: 2024,
+          licensePlate: `TRK-${String(truck.truck_id).padStart(4, '0')}`,
+          driver: `Driver ${truck.truck_id}`,
+          driverPhone: "(555) 000-0000",
+          driverEmail: `driver${truck.truck_id}@fleet.com`,
+          driverImage: null,
+          status,
+          currentLocation: truck.gps ? `${truck.gps.latitude.toFixed(2)}°, ${truck.gps.longitude.toFixed(2)}°` : "Unknown",
+          destination: truck.gps?.destination_node ? `Node ${truck.gps.destination_node}` : "Unknown",
+          eta: "Calculating...",
+          speed: truck.gps?.speed_mph || 0,
+          fuel: 75, // Mock for now
+          temperature: truck.sensor?.temperature_c || 0,
+          humidity: truck.sensor?.humidity_pct || 0,
+          odometer: 0,
+          deliveries: { completed: 0, pending: 0 },
+          gps: truck.gps,
+          sensor: truck.sensor,
+          decision: truck.decision,
+        }
+      })
+    }
+    
+    // Fallback to mock data
+    return [{
+      id: "T1",
+      truck_id: 1,
+      name: "Truck 1",
+      make: "Volvo",
+      model: "FH16",
+      year: 2022,
+      licensePlate: "TRK-0001",
+      driver: "John Smith",
+      driverPhone: "(555) 123-4567",
+      driverEmail: "john.smith@ibm.com",
+      driverImage: null,
+      status: "active" as const,
+      currentLocation: "Chicago Area",
+      destination: "Milwaukee, WI",
+      eta: "2h 15m",
+      speed: 0,
+      fuel: 78,
+      temperature: 0,
+      humidity: 0,
+      odometer: 45672,
+      deliveries: { completed: 156, pending: 3 },
+      gps: null,
+      sensor: null,
+      decision: null,
+    }]
+  }, [dbFleetData])
+  
+  // Set initial selected truck when trucksData is available
+  useEffect(() => {
+    if (!selectedTruck && trucksData.length > 0) {
+      setSelectedTruck(trucksData[0])
+    }
+  }, [trucksData, selectedTruck])
 
   // Get latest telemetry point for selected truck
   const latestTelemetry = useMemo(() => {
-    const truckTelemetry = telemetryData.filter(t => t.truck_id === 1)
+    if (!selectedTruck) return telemetryData[0]
+    const truckTelemetry = telemetryData.filter(t => t.truck_id === selectedTruck.truck_id || t.truck_id === 1)
     return truckTelemetry[truckTelemetry.length - 1] || telemetryData[0]
-  }, [])
+  }, [selectedTruck])
 
-  // Get current telemetry point based on selected t value
+  // Get current telemetry from database or mock
   const currentTelemetry = useMemo(() => {
+    if (!selectedTruck) return telemetryData[0]
+    if (DATA_SOURCE === 'database' && selectedTruck.gps) {
+      return {
+        t: 0,
+        truck_id: selectedTruck.truck_id,
+        timestamp: new Date().toISOString(),
+        latitude: selectedTruck.gps.latitude,
+        longitude: selectedTruck.gps.longitude,
+        speed: selectedTruck.gps.speed_mph,
+      }
+    }
     return telemetryData.find(t => t.t === selectedTValue) || latestTelemetry
-  }, [selectedTValue, latestTelemetry])
+  }, [selectedTruck, selectedTValue, latestTelemetry])
 
   // Get corresponding sensor data
   const currentSensor = useMemo(() => {
+    if (!selectedTruck) return sensorData[0]
+    if (DATA_SOURCE === 'database' && selectedTruck.sensor) {
+      return selectedTruck.sensor
+    }
     return sensorData.find(s => s.timestamp === currentTelemetry.timestamp && s.truck_id === currentTelemetry.truck_id)
-  }, [currentTelemetry])
+  }, [selectedTruck, currentTelemetry])
+  
+  // Generate alerts from database data
+  const alerts = useMemo(() => {
+    if (DATA_SOURCE === 'database' && dbFleetData && Array.isArray(dbFleetData)) {
+      const alertList: Array<{type: 'critical' | 'warning', message: string}> = []
+      
+      dbFleetData.forEach((truck: any) => {
+        if (!truck.sensor) return
+        
+        const truckId = truck.truck_id
+        const tempF = truck.sensor.temperature_c // Actually in Fahrenheit
+        
+        // Temperature alerts (> 64.4°F)
+        if (tempF > 64.4) {
+          alertList.push({
+            type: 'critical',
+            message: `High temperature (${tempF.toFixed(1)}°F) - Truck ${truckId}`
+          })
+        }
+        
+        // Critical humidity (>= 90%)
+        if (truck.sensor.humidity_pct >= 90) {
+          alertList.push({
+            type: 'critical',
+            message: `Critical humidity (${truck.sensor.humidity_pct.toFixed(1)}%) - Truck ${truckId}`
+          })
+        }
+        // Warning humidity (>= 80%)
+        else if (truck.sensor.humidity_pct >= 80) {
+          alertList.push({
+            type: 'warning',
+            message: `High humidity (${truck.sensor.humidity_pct.toFixed(1)}%) - Truck ${truckId}`
+          })
+        }
+        
+        // Door open
+        if (truck.sensor.door_open) {
+          alertList.push({
+            type: 'warning',
+            message: `Door open - Truck ${truckId}`
+          })
+        }
+      })
+      
+      return alertList
+    }
+    
+    // Fallback mock alerts
+    return [
+      { type: 'critical' as const, message: 'Temperature spike detected - Truck 1' },
+      { type: 'warning' as const, message: 'High humidity alert - Truck 1' },
+      { type: 'warning' as const, message: 'Speed drop detected - Truck 1' },
+    ]
+  }, [dbFleetData])
 
   // Update truck data with real telemetry
   const updatedTruck = useMemo(() => {
+    if (!selectedTruck) {
+      return {
+        speed: 0,
+        fuel: 0,
+        temperature: 0,
+        humidity: 0,
+        name: "Loading...",
+        driver: "",
+        licensePlate: "",
+        driverPhone: "",
+      }
+    }
+    if (DATA_SOURCE === 'database') {
+      return selectedTruck
+    }
     return {
       ...selectedTruck,
       speed: currentTelemetry.speed,
-      temperature: currentSensor?.temperature_f || 0,
+      temperature: currentSensor?.temperature_f || currentSensor?.temperature_c || 0,
     }
   }, [selectedTruck, currentTelemetry, currentSensor])
 
@@ -100,6 +244,21 @@ export function Tracking() {
   const activeTrucks = trucksData.filter(t => t.status === 'active' || t.status === 'transit')
   const inactiveTrucks = trucksData.filter(t => t.status === 'idle' || t.status === 'maintenance')
 
+  if (!selectedTruck) {
+    return (
+      <div className="space-y-4 animate-fade-in">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Tracking</h1>
+        </div>
+        <Card className="border-border shadow-sm">
+          <CardContent className="p-6 text-center">
+            <p className="text-muted-foreground">Loading fleet data...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4 animate-fade-in">
       {/* Header */}
@@ -113,7 +272,12 @@ export function Tracking() {
         <Card className="border-border shadow-sm">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold">Fleet Vehicles</CardTitle>
-            <p className="text-xs text-muted-foreground">{trucksData.length} Total</p>
+            <p className="text-xs text-muted-foreground">
+              {trucksData.length} Total
+              {DATA_SOURCE === 'database' && !loading && (
+                <span className="ml-2 text-success">● Live</span>
+              )}
+            </p>
           </CardHeader>
           <CardContent className="space-y-3">
             {/* Active Vehicles */}
@@ -249,17 +413,22 @@ export function Tracking() {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-destructive">Alerts</p>
-                  <p className="text-2xl font-bold text-destructive">3</p>
+                  <p className="text-2xl font-bold text-destructive">{alerts.length}</p>
                 </div>
               </div>
               <ChevronDown className={cn("h-5 w-5 text-destructive transition-transform", showAlerts && "rotate-180")} />
             </div>
             {showAlerts && (
               <div className="mt-4 space-y-2 border-t border-destructive/20 pt-3">
-                <div className="text-xs space-y-1">
-                  <p className="font-medium text-destructive">• Temperature spike detected - Truck 1</p>
-                  <p className="font-medium text-warning">• High humidity alert - Truck 1</p>
-                  <p className="font-medium text-warning">• Speed drop detected - Truck 1</p>
+                <div className="text-xs space-y-1 max-h-40 overflow-y-auto">
+                  {alerts.slice(0, 10).map((alert, idx) => (
+                    <p key={idx} className={cn("font-medium", alert.type === 'critical' ? 'text-destructive' : 'text-warning')}>
+                      • {alert.message}
+                    </p>
+                  ))}
+                  {alerts.length > 10 && (
+                    <p className="text-muted-foreground italic">+ {alerts.length - 10} more alerts</p>
+                  )}
                 </div>
               </div>
             )}
@@ -291,7 +460,7 @@ export function Tracking() {
             </div>
             <div className="rounded-lg bg-info/10 p-3 text-center">
               <Droplets className="h-5 w-5 mx-auto text-info mb-1" />
-              <p className="text-xl font-bold text-foreground">{currentSensor?.humidity_pct || 0}%</p>
+              <p className="text-xl font-bold text-foreground">{(currentSensor?.humidity_pct || 0).toFixed(1)}%</p>
               <p className="text-[10px] text-muted-foreground">Humidity</p>
             </div>
           </div>

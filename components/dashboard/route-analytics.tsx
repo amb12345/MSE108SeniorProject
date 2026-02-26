@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FleetMap } from "./fleet-map"
 import { Route, Clock, Ruler, Fuel, Leaf, DollarSign, AlertTriangle, Zap, ArrowRight, ArrowDown, CheckCircle2, MapPin, Truck } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useFleetData } from "@/hooks/use-fleet-data"
+import { DATA_SOURCE } from "@/lib/use-data-source"
 
 const locations = [
   "New York, NY",
@@ -69,14 +71,14 @@ const routeOptions = [
   },
 ]
 
-const availableTrucks = [
+const mockAvailableTrucks = [
   { id: "T1", name: "Truck 1", driver: "John Smith", status: "available" },
   { id: "T2", name: "Truck 2", driver: "Sarah Johnson", status: "available" },
   { id: "T3", name: "Truck 3", driver: "Mike Davis", status: "available" },
   { id: "T4", name: "Truck 4", driver: "Emily Brown", status: "available" },
 ]
 
-const pastRoutes = [
+const mockPastRoutes = [
   { id: "R001", from: "Chicago", to: "Denver", date: "Jan 18", time: "7h 32m", distance: "498 mi", status: "completed" as const, truck: "Truck 1", progress: 100 },
   { id: "R002", from: "Dallas", to: "Houston", date: "Jan 17", time: "3h 45m", distance: "239 mi", status: "in-progress" as const, truck: "Truck 2", progress: 65 },
   { id: "R003", from: "LA", to: "Phoenix", date: "Jan 16", time: "5h 12m", distance: "372 mi", status: "queued" as const, truck: "Truck 3", progress: 0 },
@@ -95,7 +97,58 @@ export function RouteAnalytics() {
   const [toLocation, setToLocation] = useState("Los Angeles, CA")
   const [selectedOption, setSelectedOption] = useState("fastest")
   const [selectedTruck, setSelectedTruck] = useState("")
-  const [recentRoutes, setRecentRoutes] = useState(pastRoutes)
+  const [recentRoutes, setRecentRoutes] = useState(mockPastRoutes)
+  
+  // Fetch database fleet data
+  const { data: dbFleetData, loading } = useFleetData(undefined, 60000)
+  
+  // Transform database trucks into available trucks format
+  const availableTrucks = useMemo(() => {
+    if (DATA_SOURCE === 'database' && dbFleetData && Array.isArray(dbFleetData)) {
+      return dbFleetData.map((truck: any) => ({
+        id: `T${truck.truck_id}`,
+        name: `Truck ${truck.truck_id}`,
+        driver: `Driver ${truck.truck_id}`,
+        status: truck.gps?.at_node === true ? "available" : "in-transit",
+        truck_id: truck.truck_id,
+      }))
+    }
+    return mockAvailableTrucks
+  }, [dbFleetData])
+  
+  // Generate route history from database
+  const routeHistory = useMemo(() => {
+    if (DATA_SOURCE === 'database' && dbFleetData && Array.isArray(dbFleetData)) {
+      return dbFleetData.slice(0, 10).map((truck: any, index: number) => {
+        const isCompleted = truck.gps?.at_node === true
+        const isMoving = truck.gps?.speed_mph > 0
+        
+        let status: 'completed' | 'in-progress' | 'queued' = 'queued'
+        let progress = 0
+        
+        if (isCompleted) {
+          status = 'completed'
+          progress = 100
+        } else if (isMoving) {
+          status = 'in-progress'
+          progress = truck.gps?.edge_progress_frac ? Math.round(truck.gps.edge_progress_frac * 100) : 50
+        }
+        
+        return {
+          id: `R${String(truck.truck_id).padStart(3, '0')}`,
+          from: `Node ${truck.gps?.current_node || 0}`,
+          to: `Node ${truck.gps?.destination_node || 0}`,
+          date: new Date(truck.gps?.timestamp || Date.now()).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          time: "N/A",
+          distance: "N/A",
+          status,
+          truck: `Truck ${truck.truck_id}`,
+          progress,
+        }
+      })
+    }
+    return recentRoutes
+  }, [dbFleetData, recentRoutes])
 
   const handleAssignRoute = () => {
     const selectedRouteOption = routeOptions.find(opt => opt.id === selectedOption)
@@ -117,6 +170,7 @@ export function RouteAnalytics() {
     }
 
     setRecentRoutes([newRoute, ...recentRoutes])
+    // Note: In production, this would trigger an API call to create the route
     setSelectedTruck("")
   }
 
@@ -366,8 +420,17 @@ export function RouteAnalytics() {
           <CardTitle className="text-lg font-semibold">Route Queue & Recent</CardTitle>
         </CardHeader>
         <CardContent>
+          {DATA_SOURCE === 'database' && !loading && (
+            <div className="mb-3 flex items-center gap-2 text-sm">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
+              </span>
+              <span className="text-success">Live from Database</span>
+            </div>
+          )}
           <div className="space-y-3">
-            {recentRoutes.map((route, index) => (
+            {routeHistory.map((route, index) => (
               <div
                 key={route.id}
                 className="flex flex-col gap-4 rounded-xl bg-muted/30 p-4 transition-colors hover:bg-muted/50"

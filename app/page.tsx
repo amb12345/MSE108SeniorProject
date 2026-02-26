@@ -15,7 +15,7 @@ export default function Dashboard() {
   const renderContent = () => {
     switch (activeTab) {
       case "dashboard":
-        return <Overview />
+        return <Overview onNavigate={setActiveTab} />
       case "tracking":
         return <Tracking />
       case "routes":
@@ -23,7 +23,7 @@ export default function Dashboard() {
       case "telemetry":
         return <Alerts />
       default:
-        return <Overview />
+        return <Overview onNavigate={setActiveTab} />
     }
   }
 

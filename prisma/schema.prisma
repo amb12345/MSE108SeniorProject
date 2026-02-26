@@ -1,0 +1,79 @@
+// This is your Prisma schema file
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Fleet GPS/Telemetry Data
+model GpsData {
+  id                   Int      @id @default(autoincrement())
+  t                    Int
+  truck_id             Int
+  timestamp            DateTime
+  latitude             Float
+  longitude            Float
+  speed_mph            Float
+  current_node         Int?
+  next_node            Int?
+  destination_node     Int?
+  at_node              Boolean?
+  is_facility_node     Boolean?
+  edge_travel_time_min Float?
+  edge_progress_frac   Float?
+  
+  createdAt            DateTime @default(now())
+  
+  @@index([truck_id, timestamp])
+  @@index([timestamp])
+  @@map("gps_data")
+}
+
+// Fleet Sensor Data
+model SensorData {
+  id                     Int      @id @default(autoincrement())
+  t                      Int
+  truck_id               Int
+  timestamp              DateTime
+  temperature_c          Float
+  humidity_pct           Float
+  door_open              Boolean
+  shipment_value         Float
+  remaining_slack_min    Float
+  violation_min          Float
+  current_node           Int?
+  next_node              Int?
+  destination_node       Int?
+  at_node                Boolean?
+  is_facility_node       Boolean?
+  edge_travel_time_min   Float?
+  edge_progress_frac     Float?
+  
+  createdAt              DateTime @default(now())
+  
+  @@index([truck_id, timestamp])
+  @@index([timestamp])
+  @@map("sensor_data")
+}
+
+// Fleet Decision Data
+model DecisionData {
+  id                   Int      @id @default(autoincrement())
+  truck_id             Int
+  timestamp            DateTime
+  recommended_action   String
+  mean_cost            Float
+  all_actions          Json
+  reason               String
+  route                Json
+  mc_samples           Int
+  
+  createdAt            DateTime @default(now())
+  
+  @@index([truck_id, timestamp])
+  @@index([timestamp])
+  @@map("decision_data")
+}
