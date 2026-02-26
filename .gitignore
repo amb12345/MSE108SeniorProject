@@ -36,4 +36,6 @@ dist/
 *.db
 *.db-journal
 prisma/migrations/
-data/*.csv
+
+# Generated static data (built from CSV files at build time)
+lib/static-fleet-data.ts

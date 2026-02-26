@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
 
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-static'
 
 export async function GET(request: Request) {
+  if (process.env.NEXT_PUBLIC_BUILD_MODE === 'static') {
+    return NextResponse.json([])
+  }
+
+  const { prisma } = await import('@/lib/db')
   try {
     const { searchParams } = new URL(request.url)
     const truckId = searchParams.get('truckId')
     const limit = parseInt(searchParams.get('limit') || '100')
-    const type = searchParams.get('type') // 'gps', 'sensor', 'decision'
+    const type = searchParams.get('type')
     
     if (!truckId) {
       return NextResponse.json(
@@ -43,7 +47,6 @@ export async function GET(request: Request) {
         })
         break
       default:
-        // Get all types
         const [gps, sensor, decision] = await Promise.all([
           prisma.gpsData.findMany({
             where: { truck_id: parsedTruckId },

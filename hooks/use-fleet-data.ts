@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { DATA_SOURCE } from '@/lib/use-data-source'
 
 export interface FleetTruckData {
   truck_id: number
@@ -10,6 +11,8 @@ export interface FleetTruckData {
     current_node?: number
     next_node?: number
     destination_node?: number
+    at_node?: boolean
+    edge_progress_frac?: string
   } | null
   sensor: {
     temperature_c: number
@@ -29,9 +32,7 @@ export interface FleetTruckData {
 }
 
 /**
- * Hook to fetch and poll fleet data from the database
- * @param truckId - Optional truck ID to fetch specific truck data
- * @param pollInterval - Polling interval in milliseconds (default: 60000 = 1 minute)
+ * Hook to fetch fleet data — uses API when database mode, static file when static mode
  */
 export function useFleetData(truckId?: number, pollInterval: number = 60000) {
   const [data, setData] = useState<FleetTruckData | FleetTruckData[] | null>(null)
@@ -42,18 +43,26 @@ export function useFleetData(truckId?: number, pollInterval: number = 60000) {
     const fetchData = async () => {
       try {
         setLoading(true)
-        const url = truckId 
-          ? `/api/fleet?truckId=${truckId}`
-          : '/api/fleet'
-        
-        const response = await fetch(url)
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
+
+        if (DATA_SOURCE === 'mock') {
+          const { staticFleetData } = await import('@/lib/static-fleet-data')
+          if (truckId !== undefined) {
+            const truck = (staticFleetData as any[]).find((t: any) => t.truck_id === truckId)
+            setData(truck || null)
+          } else {
+            setData(staticFleetData as any)
+          }
+          setError(null)
+          setLoading(false)
+          return
         }
-        
-        const result = await response.json()
-        setData(result)
+
+        const url = truckId
+          ? `/api/fleet/list?truckId=${truckId}`
+          : '/api/fleet/list'
+        const response = await fetch(url)
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+        setData(await response.json())
         setError(null)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch fleet data')
@@ -63,11 +72,9 @@ export function useFleetData(truckId?: number, pollInterval: number = 60000) {
       }
     }
 
-    // Initial fetch
     fetchData()
 
-    // Set up polling if pollInterval > 0
-    if (pollInterval > 0) {
+    if (DATA_SOURCE === 'database' && pollInterval > 0) {
       const interval = setInterval(fetchData, pollInterval)
       return () => clearInterval(interval)
     }
@@ -92,16 +99,18 @@ export function useFleetHistory(
     const fetchHistory = async () => {
       try {
         setLoading(true)
-        const url = `/api/fleet/history?truckId=${truckId}&type=${type}&limit=${limit}`
-        
-        const response = await fetch(url)
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
+
+        if (DATA_SOURCE === 'mock') {
+          setData([])
+          setError(null)
+          setLoading(false)
+          return
         }
-        
-        const result = await response.json()
-        setData(result)
+
+        const url = `/api/fleet/history?truckId=${truckId}&type=${type}&limit=${limit}`
+        const response = await fetch(url)
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+        setData(await response.json())
         setError(null)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch history')
@@ -118,7 +127,7 @@ export function useFleetHistory(
 }
 
 /**
- * Hook to fetch fleet statistics
+ * Hook to fetch fleet statistics — uses API or static data
  */
 export function useFleetStats(pollInterval: number = 300000) {
   const [stats, setStats] = useState<any>(null)
@@ -129,14 +138,18 @@ export function useFleetStats(pollInterval: number = 300000) {
     const fetchStats = async () => {
       try {
         setLoading(true)
-        const response = await fetch('/api/fleet/stats')
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
+
+        if (DATA_SOURCE === 'mock') {
+          const { staticFleetStats } = await import('@/lib/static-fleet-data')
+          setStats(staticFleetStats)
+          setError(null)
+          setLoading(false)
+          return
         }
-        
-        const result = await response.json()
-        setStats(result)
+
+        const response = await fetch('/api/fleet/stats')
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+        setStats(await response.json())
         setError(null)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch stats')
@@ -146,11 +159,9 @@ export function useFleetStats(pollInterval: number = 300000) {
       }
     }
 
-    // Initial fetch
     fetchStats()
 
-    // Set up polling
-    if (pollInterval > 0) {
+    if (DATA_SOURCE === 'database' && pollInterval > 0) {
       const interval = setInterval(fetchStats, pollInterval)
       return () => clearInterval(interval)
     }
