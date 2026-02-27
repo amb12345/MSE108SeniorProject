@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { FleetMap } from "./fleet-map"
-import { Truck, User, Fuel, Gauge, Thermometer, MapPin, Clock, Package, Droplets, AlertTriangle, ChevronDown, Snowflake } from "lucide-react"
+import { Truck, Gauge, Thermometer, MapPin, Clock, Droplets, AlertTriangle, ChevronDown, Snowflake, DoorOpen, DoorClosed } from "lucide-react"
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts"
 import { telemetryData, sensorData } from "@/lib/data"
 import { cn } from "@/lib/utils"
@@ -151,51 +151,36 @@ export function Tracking() {
     return sensorData.find(s => s.timestamp === currentTelemetry.timestamp && s.truck_id === currentTelemetry.truck_id)
   }, [selectedTruck, currentTelemetry])
   
-  // Generate alerts from database data
+  // Generate alerts scoped to the selected truck
   const alerts = useMemo(() => {
-    if (dbFleetData && Array.isArray(dbFleetData)) {
-      const alertList: Array<{type: 'critical' | 'warning', message: string}> = []
-      
-      dbFleetData.forEach((truck: any) => {
-        if (!truck.sensor) return
-        
-        const truckId = truck.truck_id
-        const tempF = truck.sensor.temperature_c
-        const humidityPct = parseFloat(truck.sensor.humidity_pct) || 0
-        
-        if (tempF > 64.4) {
-          alertList.push({
-            type: 'critical',
-            message: `High temperature (${tempF.toFixed(1)}°F) - Truck ${truckId}`
-          })
-        }
-        
-        if (humidityPct >= 90) {
-          alertList.push({
-            type: 'critical',
-            message: `Critical humidity (${humidityPct.toFixed(1)}%) - Truck ${truckId}`
-          })
-        }
-        else if (humidityPct >= 80) {
-          alertList.push({
-            type: 'warning',
-            message: `High humidity (${humidityPct.toFixed(1)}%) - Truck ${truckId}`
-          })
-        }
-        
-        if (truck.sensor.door_open) {
-          alertList.push({
-            type: 'warning',
-            message: `Door open - Truck ${truckId}`
-          })
-        }
-      })
-      
-      return alertList
+    if (!selectedTruck || !dbFleetData || !Array.isArray(dbFleetData)) return []
+    const truck = dbFleetData.find((t: any) => t.truck_id === selectedTruck.truck_id)
+    if (!truck?.sensor) return []
+
+    const alertList: Array<{type: 'critical' | 'warning', message: string}> = []
+    const tempF = truck.sensor.temperature_c
+    const humidityPct = parseFloat(String(truck.sensor.humidity_pct)) || 0
+
+    if (tempF > 64.4) {
+      alertList.push({ type: 'critical', message: `High temperature: ${tempF.toFixed(1)}°F` })
     }
-    
-    return []
-  }, [dbFleetData])
+
+    if (humidityPct >= 90) {
+      alertList.push({ type: 'critical', message: `Critical humidity: ${humidityPct.toFixed(1)}%` })
+    } else if (humidityPct >= 80) {
+      alertList.push({ type: 'warning', message: `High humidity: ${humidityPct.toFixed(1)}%` })
+    }
+
+    if (truck.sensor.door_open) {
+      alertList.push({ type: 'warning', message: 'Door is open' })
+    }
+
+    if (truck.decision?.recommended_action && truck.decision.recommended_action !== 'continue') {
+      alertList.push({ type: 'warning', message: `Action recommended: ${truck.decision.recommended_action}` })
+    }
+
+    return alertList
+  }, [dbFleetData, selectedTruck])
 
   // Update truck data with real telemetry
   const updatedTruck = useMemo(() => {
@@ -257,11 +242,11 @@ export function Tracking() {
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Tracking</h1>
       </div>
 
-      {/* Main Grid */}
-      <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
-        {/* Fleet Vehicles List */}
-        <Card className="border-border shadow-sm">
-          <CardHeader className="pb-3">
+      {/* Main Grid — both columns stretch to same height */}
+      <div className="grid gap-4 lg:grid-cols-[300px_1fr] items-stretch">
+        {/* Fleet Vehicles List — matches map height, scrollable */}
+        <Card className="border-border shadow-sm flex flex-col lg:max-h-[462px]">
+          <CardHeader className="pb-3 shrink-0">
             <CardTitle className="text-base font-semibold">Fleet Vehicles</CardTitle>
             <p className="text-xs text-muted-foreground">
               {trucksData.length} Total
@@ -270,7 +255,7 @@ export function Tracking() {
               )}
             </p>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="flex-1 overflow-y-auto space-y-3 min-h-0">
             {/* Active Vehicles */}
             {activeTrucks.length > 0 && (
               <div>
@@ -289,7 +274,7 @@ export function Tracking() {
                     >
                       <div className="flex items-center gap-3">
                         <div className={cn(
-                          "flex h-10 w-10 items-center justify-center rounded-lg",
+                          "flex h-10 w-10 items-center justify-center rounded-lg shrink-0",
                           selectedTruck.id === truck.id ? "bg-primary/20" : "bg-muted"
                         )}>
                           <Truck className={cn("h-5 w-5", selectedTruck.id === truck.id ? "text-primary" : "text-muted-foreground")} />
@@ -330,7 +315,7 @@ export function Tracking() {
                     >
                       <div className="flex items-center gap-3">
                         <div className={cn(
-                          "flex h-10 w-10 items-center justify-center rounded-lg",
+                          "flex h-10 w-10 items-center justify-center rounded-lg shrink-0",
                           selectedTruck.id === truck.id ? "bg-primary/20" : "bg-muted"
                         )}>
                           <Truck className={cn("h-5 w-5", selectedTruck.id === truck.id ? "text-primary" : "text-muted-foreground")} />
@@ -394,32 +379,46 @@ export function Tracking() {
           </CardContent>
         </Card>
 
-        {/* Alerts */}
-        <Card className="border-destructive/30 bg-destructive/5 shadow-sm cursor-pointer hover:bg-destructive/10 transition-colors" onClick={() => setShowAlerts(!showAlerts)}>
+        {/* Alerts — scoped to selected truck */}
+        <Card
+          className={cn(
+            "shadow-sm cursor-pointer transition-colors",
+            alerts.length > 0
+              ? "border-destructive/30 bg-destructive/5 hover:bg-destructive/10"
+              : "border-success/30 bg-success/5"
+          )}
+          onClick={() => setShowAlerts(!showAlerts)}
+        >
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-destructive/20 p-2">
-                  <AlertTriangle className="h-5 w-5 text-destructive" />
+                <div className={cn(
+                  "rounded-lg p-2",
+                  alerts.length > 0 ? "bg-destructive/20" : "bg-success/20"
+                )}>
+                  <AlertTriangle className={cn("h-5 w-5", alerts.length > 0 ? "text-destructive" : "text-success")} />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-destructive">Alerts</p>
-                  <p className="text-2xl font-bold text-destructive">{alerts.length}</p>
+                  <p className={cn("text-sm font-medium", alerts.length > 0 ? "text-destructive" : "text-success")}>
+                    {selectedTruck.name} Alerts
+                  </p>
+                  <p className={cn("text-2xl font-bold", alerts.length > 0 ? "text-destructive" : "text-success")}>
+                    {alerts.length === 0 ? "OK" : alerts.length}
+                  </p>
                 </div>
               </div>
-              <ChevronDown className={cn("h-5 w-5 text-destructive transition-transform", showAlerts && "rotate-180")} />
+              {alerts.length > 0 && (
+                <ChevronDown className={cn("h-5 w-5 text-destructive transition-transform", showAlerts && "rotate-180")} />
+              )}
             </div>
-            {showAlerts && (
+            {showAlerts && alerts.length > 0 && (
               <div className="mt-4 space-y-2 border-t border-destructive/20 pt-3">
-                <div className="text-xs space-y-1 max-h-40 overflow-y-auto">
-                  {alerts.slice(0, 10).map((alert, idx) => (
+                <div className="text-xs space-y-1.5">
+                  {alerts.map((alert, idx) => (
                     <p key={idx} className={cn("font-medium", alert.type === 'critical' ? 'text-destructive' : 'text-warning')}>
                       • {alert.message}
                     </p>
                   ))}
-                  {alerts.length > 10 && (
-                    <p className="text-muted-foreground italic">+ {alerts.length - 10} more alerts</p>
-                  )}
                 </div>
               </div>
             )}
@@ -430,7 +429,10 @@ export function Tracking() {
       {/* Bottom Row: Telemetry Data */}
       <Card className="border-border shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">Telemetry Data</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base font-semibold">Telemetry Data</CardTitle>
+            <Badge variant="secondary" className="text-xs">{selectedTruck.name}</Badge>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-4 gap-3 mb-4">
@@ -440,20 +442,29 @@ export function Tracking() {
               <p className="text-[10px] text-muted-foreground">MPH</p>
             </div>
             <div className="rounded-lg bg-warning/10 p-3 text-center">
-              <Fuel className="h-5 w-5 mx-auto text-warning mb-1" />
-              <p className="text-xl font-bold text-foreground">{updatedTruck.fuel}%</p>
-              <p className="text-[10px] text-muted-foreground">Fuel</p>
-            </div>
-            <div className="rounded-lg bg-destructive/10 p-3 text-center">
-              <Thermometer className="h-5 w-5 mx-auto text-destructive mb-1" />
+              <Thermometer className="h-5 w-5 mx-auto text-warning mb-1" />
               <p className="text-xl font-bold text-foreground">{updatedTruck.temperature}°F</p>
               <p className="text-[10px] text-muted-foreground">Temp</p>
             </div>
             <div className="rounded-lg bg-info/10 p-3 text-center">
               <Droplets className="h-5 w-5 mx-auto text-info mb-1" />
-              <p className="text-xl font-bold text-foreground">{(parseFloat(currentSensor?.humidity_pct) || 0).toFixed(1)}%</p>
+              <p className="text-xl font-bold text-foreground">{updatedTruck.humidity.toFixed(1)}%</p>
               <p className="text-[10px] text-muted-foreground">Humidity</p>
             </div>
+            {(() => {
+              const doorOpen = currentSensor?.door_open ?? false
+              return (
+                <div className={cn("rounded-lg p-3 text-center", doorOpen ? "bg-destructive/10" : "bg-success/10")}>
+                  {doorOpen
+                    ? <DoorOpen className="h-5 w-5 mx-auto text-destructive mb-1" />
+                    : <DoorClosed className="h-5 w-5 mx-auto text-success mb-1" />}
+                  <p className={cn("text-xl font-bold", doorOpen ? "text-destructive" : "text-success")}>
+                    {doorOpen ? "Open" : "Closed"}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">Door</p>
+                </div>
+              )
+            })()}
           </div>
           <div className="h-[120px]">
             <ResponsiveContainer width="100%" height="100%">

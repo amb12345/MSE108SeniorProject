@@ -7,6 +7,7 @@ import { Truck, AlertTriangle, TrendingUp, TrendingDown, Thermometer, Droplets, 
 import { FleetMap } from "./fleet-map"
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar } from "recharts"
 import { useFleetData, useFleetStats } from "@/hooks/use-fleet-data"
+import { useCostData } from "@/hooks/use-cost-data"
 
 interface OverviewProps {
   onNavigate?: (tab: string) => void
@@ -171,15 +172,38 @@ export function Overview({ onNavigate }: OverviewProps) {
     }
   }, [dbFleetData, dbStats])
 
-  // Generate mock cost data
+  const { data: costResults } = useCostData(0.50, 5000)
+
+  const costSummary = useMemo(() => {
+    if (!costResults || costResults.length === 0) return null
+
+    let totalOp = 0, totalDelay = 0, totalSpoilage = 0
+    for (const truck of costResults) {
+      const bd = truck.per_action[truck.recommended_action]?.breakdown_means
+      if (!bd) continue
+      totalOp += bd.operating_travel
+      totalDelay += bd.delay_service
+      totalSpoilage += bd.spoilage
+    }
+    const total = totalOp + totalDelay + totalSpoilage
+    return { totalOp, totalDelay, totalSpoilage, total, count: costResults.length }
+  }, [costResults])
+
   const costData = useMemo(() => {
+    if (!costSummary || costSummary.total === 0) {
+      return [
+        { name: 'Operating & Travel', value: 0, color: 'hsl(var(--primary))' },
+        { name: 'Delay & Service', value: 0, color: 'hsl(var(--warning))' },
+        { name: 'Spoilage', value: 0, color: 'hsl(var(--destructive))' },
+      ]
+    }
+    const t = costSummary.total
     return [
-      { name: 'Fuel', value: 45, color: '#3b82f6' },
-      { name: 'Maintenance', value: 25, color: '#8b5cf6' },
-      { name: 'Labor', value: 20, color: '#06b6d4' },
-      { name: 'Other', value: 10, color: '#64748b' },
+      { name: 'Operating & Travel', value: Math.round((costSummary.totalOp / t) * 100), color: 'hsl(var(--primary))' },
+      { name: 'Delay & Service', value: Math.round((costSummary.totalDelay / t) * 100), color: 'hsl(var(--warning))' },
+      { name: 'Spoilage', value: Math.round((costSummary.totalSpoilage / t) * 100), color: 'hsl(var(--destructive))' },
     ]
-  }, [])
+  }, [costSummary])
 
   // Generate mock SROI trend data
   const sroiData = useMemo(() => {
@@ -390,24 +414,28 @@ export function Overview({ onNavigate }: OverviewProps) {
         </Card>
 
         {/* Humidity - Compact */}
-        <Card className="border-border shadow-sm">
+        <Card className="border-border shadow-sm overflow-hidden">
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-info/10 p-2">
+              <div className="shrink-0 rounded-lg bg-info/10 p-2">
                 <Droplets className="h-4 w-4 text-info" />
               </div>
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <p className="text-xs text-muted-foreground">Humidity Alerts</p>
-                <div className="mt-1 flex items-baseline gap-2">
-                  <p className="text-lg font-bold text-destructive">{stats.criticalHumidityAlerts || 0}</p>
-                  <span className="text-xs text-muted-foreground">Critical</span>
-                  <p className="text-lg font-bold text-warning">{stats.warningHumidityAlerts || 0}</p>
-                  <span className="text-xs text-muted-foreground">Warning</span>
+                <div className="mt-1 flex items-baseline gap-3">
+                  <div className="flex items-baseline gap-1">
+                    <p className="text-lg font-bold text-destructive">{stats.criticalHumidityAlerts || 0}</p>
+                    <span className="text-[10px] text-muted-foreground">Crit</span>
+                  </div>
+                  <div className="flex items-baseline gap-1">
+                    <p className="text-lg font-bold text-warning">{stats.warningHumidityAlerts || 0}</p>
+                    <span className="text-[10px] text-muted-foreground">Warn</span>
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="mt-2 text-xs text-muted-foreground">
-              ≥90% critical, ≥80% warning
+            <div className="mt-2 text-[11px] text-muted-foreground">
+              ≥90% critical · ≥80% warning
             </div>
           </CardContent>
         </Card>
@@ -465,20 +493,26 @@ export function Overview({ onNavigate }: OverviewProps) {
           </CardHeader>
           <CardContent>
             <div className="mb-4">
-              <p className="text-3xl font-bold text-foreground">$12,450</p>
-              <p className="text-xs text-muted-foreground">Monthly operating costs</p>
+              <p className="text-3xl font-bold text-foreground">
+                {costSummary ? `$${Math.round(costSummary.total / costSummary.count).toLocaleString()}` : '—'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {costSummary ? `Avg cost per truck (${costSummary.count} trucks)` : 'Loading cost data…'}
+              </p>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {costData.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div 
-                      className="h-3 w-3 rounded-sm" 
-                      style={{ backgroundColor: item.color }}
-                    />
+                <div key={idx}>
+                  <div className="flex items-center justify-between mb-1.5">
                     <span className="text-sm text-muted-foreground">{item.name}</span>
+                    <span className="text-sm font-semibold tabular-nums text-foreground">{item.value}%</span>
                   </div>
-                  <span className="text-sm font-medium text-foreground">{item.value}%</span>
+                  <div className="relative h-5 w-full rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
+                      style={{ width: `${item.value}%`, backgroundColor: item.color }}
+                    />
+                  </div>
                 </div>
               ))}
             </div>

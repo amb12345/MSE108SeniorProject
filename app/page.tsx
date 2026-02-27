@@ -6,6 +6,8 @@ import { Overview } from "@/components/dashboard/overview"
 import { Tracking } from "@/components/dashboard/tracking"
 import { RouteAnalytics } from "@/components/dashboard/route-analytics"
 import { Alerts } from "@/components/dashboard/alerts"
+import { Costs } from "@/components/dashboard/costs"
+import { EnvironmentalImpact } from "@/components/dashboard/environmental-impact"
 import { TooltipProvider } from "@/components/ui/tooltip"
 
 export default function Dashboard() {
@@ -22,6 +24,10 @@ export default function Dashboard() {
         return <RouteAnalytics />
       case "telemetry":
         return <Alerts />
+      case "costs":
+        return <Costs />
+      case "environmental":
+        return <EnvironmentalImpact />
       default:
         return <Overview onNavigate={setActiveTab} />
     }
