@@ -3,11 +3,13 @@
 import { useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
-import { Truck, AlertTriangle, TrendingUp, TrendingDown, Thermometer, Droplets, Activity, Gauge, DollarSign, TrendingUp as TrendingUpIcon } from "lucide-react"
+import { Truck, AlertTriangle, Thermometer, Droplets, Activity, Gauge, DollarSign, Leaf } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { FleetMap } from "./fleet-map"
-import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar } from "recharts"
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts"
 import { useFleetData, useFleetStats } from "@/hooks/use-fleet-data"
 import { useCostData } from "@/hooks/use-cost-data"
+import { useEnvironmentalData } from "@/hooks/use-environmental-data"
 
 interface OverviewProps {
   onNavigate?: (tab: string) => void
@@ -205,13 +207,22 @@ export function Overview({ onNavigate }: OverviewProps) {
     ]
   }, [costSummary])
 
-  // Generate mock SROI trend data
-  const sroiData = useMemo(() => {
-    return Array.from({ length: 12 }, (_, i) => ({
-      month: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][i],
-      value: 2.5 + Math.random() * 1.5
-    }))
-  }, [])
+  const { data: envResults } = useEnvironmentalData(0.50, 5000)
+
+  const envSummary = useMemo(() => {
+    if (!envResults || envResults.length === 0) return null
+    let co2 = 0, envVal = 0, spoilVal = 0, susVal = 0
+    for (const t of envResults) {
+      co2 += t.total_tonnes_carbon_saved
+      envVal += t.environmental_value
+      spoilVal += t.expected_spoilage_cost_saved
+      susVal += t.total_sustainability_value
+    }
+    const avgRoi = envResults.length > 0
+      ? envResults.reduce((s, t) => s + t.sustainability_roi_ratio, 0) / envResults.length
+      : 0
+    return { co2, envVal, spoilVal, susVal, avgRoi, count: envResults.length }
+  }, [envResults])
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -519,60 +530,60 @@ export function Overview({ onNavigate }: OverviewProps) {
           </CardContent>
         </Card>
 
-        {/* SROI */}
+        {/* Environmental Impact */}
         <Card className="border-border shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold">SROI</CardTitle>
-              <TrendingUpIcon className="h-4 w-4 text-success" />
+              <CardTitle className="text-base font-semibold">Environmental Impact</CardTitle>
+              <Leaf className="h-4 w-4 text-success" />
             </div>
           </CardHeader>
           <CardContent>
             <div className="mb-4">
-              <p className="text-3xl font-bold text-foreground">3.2x</p>
-              <p className="text-xs text-muted-foreground">Return on investment</p>
+              <p className="text-3xl font-bold text-success">
+                {envSummary
+                  ? `$${envSummary.susVal >= 1000 ? `${(envSummary.susVal / 1000).toFixed(1)}k` : envSummary.susVal.toFixed(0)}`
+                  : '—'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {envSummary
+                  ? `Total sustainability value · ${envSummary.count} trucks`
+                  : 'Loading environmental data…'}
+              </p>
             </div>
-            <div className="h-24">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={sroiData}>
-                  <defs>
-                    <linearGradient id="sroiGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--success))" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="hsl(var(--success))" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <XAxis 
-                    dataKey="month" 
-                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                    tickLine={false}
-                    axisLine={false}
-                    interval={2}
-                  />
-                  <YAxis hide />
-                <RechartsTooltip
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px',
-                    fontSize: '11px',
-                    fontWeight: 'bold',
-                  }}
-                  labelStyle={{
-                    fontSize: '11px',
-                    color: 'hsl(var(--foreground))',
-                    fontWeight: 'bold',
-                  }}
-                  formatter={(value: number) => [`${value.toFixed(1)}x`, 'SROI']}
-                />
-                  <Area 
-                    type="monotone" 
-                    dataKey="value" 
-                    stroke="hsl(var(--success))" 
-                    strokeWidth={2}
-                    fill="url(#sroiGradient)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="space-y-3">
+              {(() => {
+                if (!envSummary) return null
+                const items = [
+                  { label: 'Environmental Value', value: envSummary.envVal, barClass: 'bg-success' },
+                  { label: 'Spoilage Cost Saved', value: envSummary.spoilVal, barClass: 'bg-primary' },
+                ]
+                const maxVal = Math.max(...items.map(i => i.value), 1)
+                return items.map((item, idx) => (
+                  <div key={idx}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-muted-foreground">{item.label}</span>
+                      <span className="text-xs font-semibold tabular-nums text-foreground">
+                        ${item.value >= 1000 ? `${(item.value / 1000).toFixed(1)}k` : item.value.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="relative h-4 w-full rounded-full bg-muted/50 overflow-hidden">
+                      <div
+                        className={cn("absolute inset-y-0 left-0 rounded-full transition-all duration-500", item.barClass)}
+                        style={{ width: `${Math.max((item.value / maxVal) * 100, 2)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))
+              })()}
+              {envSummary && (
+                <div className="flex items-center justify-between pt-1 border-t border-border">
+                  <span className="text-xs font-medium text-muted-foreground">Total Sustainability</span>
+                  <span className="text-sm font-bold tabular-nums text-success">
+                    ${envSummary.susVal >= 1000 ? `${(envSummary.susVal / 1000).toFixed(1)}k` : envSummary.susVal.toFixed(2)}
+                  </span>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

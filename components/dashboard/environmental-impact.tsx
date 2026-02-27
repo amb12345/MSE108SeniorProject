@@ -380,7 +380,7 @@ export function EnvironmentalImpact() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            Environmental Impact (SROI)
+            Environmental Impact
           </h1>
           <p className="text-sm text-muted-foreground">
             {loading
@@ -492,12 +492,12 @@ export function EnvironmentalImpact() {
         </div>
       )}
 
-      {/* Fleet CO₂ per-decision indicator */}
+      {/* Total Value Saved per Decision */}
       {totals && totals.count > 0 && (
         <Card className="border-border shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">
-              CO₂ Saved per Decision
+              Total Value Saved per Decision
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -506,7 +506,7 @@ export function EnvironmentalImpact() {
                 <BarChart
                   data={sorted.map((t) => ({
                     name: `T${t.truck_id}`,
-                    co2_kg: t.total_tonnes_carbon_saved * 1000,
+                    value: t.total_sustainability_value,
                     action: t.chosen_action,
                   }))}
                   barSize={16}
@@ -527,8 +527,8 @@ export function EnvironmentalImpact() {
                     }}
                     axisLine={false}
                     tickLine={false}
-                    width={40}
-                    tickFormatter={(v: number) => `${v.toFixed(0)} kg`}
+                    width={45}
+                    tickFormatter={(v: number) => fmt$(v)}
                   />
                   <RechartsTooltip
                     contentStyle={{
@@ -538,11 +538,11 @@ export function EnvironmentalImpact() {
                       fontSize: "11px",
                     }}
                     formatter={(value: number, _: string, props: any) => [
-                      `${value.toFixed(1)} kg CO₂`,
+                      fmt$(value),
                       ACTION_LABELS[props.payload.action] ?? props.payload.action,
                     ]}
                   />
-                  <Bar dataKey="co2_kg" radius={[4, 4, 0, 0]}>
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                     {sorted.map((t, idx) => (
                       <Cell
                         key={idx}

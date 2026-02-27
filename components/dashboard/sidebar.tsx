@@ -24,7 +24,7 @@ const navItems = [
   { id: "dashboard", label: "Dashboard", icon: BarChart3, description: "Overview & metrics", children: [
     { id: "telemetry", label: "Telemetry Alerts", icon: Activity, description: "Sensor data" },
     { id: "costs", label: "Optimization", icon: DollarSign, description: "Monte Carlo costs" },
-    { id: "environmental", label: "Environmental Impact (SROI)", icon: Leaf, description: "Sustainability metrics" },
+    { id: "environmental", label: "Environmental Impact", icon: Leaf, description: "Sustainability metrics" },
   ]},
   { id: "tracking", label: "Live Tracking", icon: MapPin, description: "Real-time location" },
   { id: "routes", label: "Route Analytics", icon: Link2, description: "Route optimization" },
