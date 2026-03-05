@@ -6,20 +6,9 @@ import {
   DEFAULT_CARGO_TONS,
   EPA_CARBON_MULTIPLIER,
 } from '@/lib/environmental-engine'
+import { useFleetBackend } from '@/contexts/fleet-backend-context'
 
 export type { TruckEnvironmentalImpact }
-
-async function computeStaticImpact(
-  riskThreshold: number,
-  n: number,
-  cargoTons: number,
-  carbonPrice: number,
-): Promise<TruckEnvironmentalImpact[]> {
-  const { staticFleetData } = await import('../lib/static-fleet-data')
-  return computeFleetEnvironmentalImpact(
-    staticFleetData, riskThreshold, n, cargoTons, carbonPrice,
-  )
-}
 
 export function useEnvironmentalData(
   riskThreshold: number = 0.5,
@@ -31,12 +20,29 @@ export function useEnvironmentalData(
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const { fleetData: backendFleetData, isBackendMode } = useFleetBackend()
+
   const fetch_ = useCallback(async () => {
     try {
       setLoading(true)
 
+      if (isBackendMode) {
+        if (backendFleetData && backendFleetData.length > 0) {
+          const results = computeFleetEnvironmentalImpact(
+            backendFleetData, riskThreshold, n, cargoTons, carbonPrice,
+          )
+          setData(results)
+        }
+        setError(null)
+        setLoading(false)
+        return
+      }
+
       if (DATA_SOURCE === 'mock') {
-        const results = await computeStaticImpact(riskThreshold, n, cargoTons, carbonPrice)
+        const { staticFleetData } = await import('../lib/static-fleet-data')
+        const results = computeFleetEnvironmentalImpact(
+          staticFleetData, riskThreshold, n, cargoTons, carbonPrice,
+        )
         setData(results)
         setError(null)
         setLoading(false)
@@ -59,7 +65,7 @@ export function useEnvironmentalData(
     } finally {
       setLoading(false)
     }
-  }, [riskThreshold, n, cargoTons, carbonPrice])
+  }, [riskThreshold, n, cargoTons, carbonPrice, isBackendMode, backendFleetData])
 
   useEffect(() => { fetch_() }, [fetch_])
 

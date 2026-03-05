@@ -11,13 +11,22 @@ import {
   Truck,
   DollarSign,
   Leaf,
+  RefreshCw,
 } from "lucide-react"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "@/components/ui/tooltip"
 
 interface SidebarProps {
   activeTab: string
   onTabChange: (tab: string) => void
   collapsed: boolean
   onCollapse: (collapsed: boolean) => void
+  onRefresh?: () => void
+  refreshLoading?: boolean
 }
 
 const navItems = [
@@ -30,7 +39,16 @@ const navItems = [
   { id: "routes", label: "Route Analytics", icon: Link2, description: "Route optimization" },
 ]
 
-export function Sidebar({ activeTab, onTabChange, collapsed, onCollapse }: SidebarProps) {
+export function Sidebar({
+  activeTab,
+  onTabChange,
+  collapsed,
+  onCollapse,
+  onRefresh,
+  refreshLoading,
+}: SidebarProps) {
+  const showRefresh = Boolean(process.env.NEXT_PUBLIC_BACKEND_URL && onRefresh)
+
   return (
     <aside
       className={cn(
@@ -41,17 +59,68 @@ export function Sidebar({ activeTab, onTabChange, collapsed, onCollapse }: Sideb
       {/* Logo Section */}
       <div className={cn(
         "flex items-center h-16 border-b border-white/20 px-4",
-        collapsed ? "justify-center" : "gap-3"
+        collapsed ? "flex-col justify-center gap-1" : "gap-3"
       )}>
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/20">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/20">
           <Truck className="h-5 w-5 text-white" />
         </div>
-        {!collapsed && (
-          <div className="flex flex-col">
-            <span className="text-xl font-bold text-white tracking-tight">IBM</span>
-            <span className="text-[10px] text-white/70">Fleet Management</span>
+        {!collapsed ? (
+          <div className="flex flex-1 items-center justify-between min-w-0">
+            <div className="flex flex-col min-w-0">
+              <span className="text-xl font-bold text-white tracking-tight">IBM</span>
+              <span className="text-[10px] text-white/70">Fleet Management</span>
+            </div>
+            {showRefresh && (
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={onRefresh}
+                      disabled={refreshLoading}
+                      className={cn(
+                        "ml-auto flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-all duration-200",
+                        "bg-white/10 text-white/90 hover:bg-white/20 hover:text-white hover:scale-105",
+                        "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100",
+                        "focus:outline-none focus:ring-2 focus:ring-white/40 focus:ring-offset-2 focus:ring-offset-transparent"
+                      )}
+                      aria-label="Refresh fleet data from backend"
+                    >
+                      <RefreshCw
+                        className={cn(
+                          "h-4 w-4",
+                          refreshLoading && "animate-spin"
+                        )}
+                      />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={8}>
+                    <p>Refresh from backend</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
-        )}
+        ) : showRefresh ? (
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={onRefresh}
+                  disabled={refreshLoading}
+                  className={cn(
+                    "flex h-7 w-7 items-center justify-center rounded-md transition-all",
+                    "bg-white/10 text-white/90 hover:bg-white/20",
+                    "disabled:opacity-50"
+                  )}
+                  aria-label="Refresh fleet data"
+                >
+                  <RefreshCw className={cn("h-3.5 w-3.5", refreshLoading && "animate-spin")} />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Refresh from backend</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : null}
       </div>
 
       {/* Navigation */}

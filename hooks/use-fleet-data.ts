@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { DATA_SOURCE } from '@/lib/use-data-source'
+import { useFleetBackend } from '@/contexts/fleet-backend-context'
 
 export interface FleetTruckData {
   truck_id: number
@@ -38,8 +39,23 @@ export function useFleetData(truckId?: number, pollInterval: number = 60000) {
   const [data, setData] = useState<FleetTruckData | FleetTruckData[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { fleetData: backendFleetData, isBackendMode } = useFleetBackend()
 
   useEffect(() => {
+    if (isBackendMode) {
+      if (backendFleetData) {
+        if (truckId !== undefined) {
+          const truck = backendFleetData.find((t: FleetTruckData) => t.truck_id === truckId)
+          setData(truck || null)
+        } else {
+          setData(backendFleetData)
+        }
+        setError(null)
+      }
+      setLoading(false)
+      return
+    }
+
     const fetchData = async () => {
       try {
         setLoading(true)
@@ -74,13 +90,15 @@ export function useFleetData(truckId?: number, pollInterval: number = 60000) {
 
     fetchData()
 
-    if (DATA_SOURCE === 'database' && pollInterval > 0) {
+    if (DATA_SOURCE === 'database' && pollInterval > 0 && !isBackendMode) {
       const interval = setInterval(fetchData, pollInterval)
       return () => clearInterval(interval)
     }
-  }, [truckId, pollInterval])
+  }, [truckId, pollInterval, isBackendMode, backendFleetData])
 
-  return { data, loading, error }
+  const loadingState = isBackendMode && backendFleetData ? false : loading
+
+  return { data, loading: loadingState, error }
 }
 
 /**
@@ -94,14 +112,31 @@ export function useFleetHistory(
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { historyMap, isBackendMode } = useFleetBackend()
 
   useEffect(() => {
+    if (isBackendMode) {
+      const h = historyMap[truckId]
+      if (h) {
+        const sliced = (arr: any[]) => arr.slice(0, limit)
+        if (type === 'gps') setData(sliced(h.gps))
+        else if (type === 'sensor') setData(sliced(h.sensor))
+        else if (type === 'decision') setData(sliced(h.decision))
+        else setData({ gps: sliced(h.gps), sensor: sliced(h.sensor), decision: sliced(h.decision) })
+      } else {
+        setData(type === 'all' ? { gps: [], sensor: [], decision: [] } : [])
+      }
+      setError(null)
+      setLoading(false)
+      return
+    }
+
     const fetchHistory = async () => {
       try {
         setLoading(true)
 
         if (DATA_SOURCE === 'mock') {
-          setData([])
+          setData(type === 'all' ? { gps: [], sensor: [], decision: [] } : [])
           setError(null)
           setLoading(false)
           return
@@ -121,7 +156,7 @@ export function useFleetHistory(
     }
 
     fetchHistory()
-  }, [truckId, type, limit])
+  }, [truckId, type, limit, isBackendMode, historyMap])
 
   return { data, loading, error }
 }
@@ -133,8 +168,16 @@ export function useFleetStats(pollInterval: number = 300000) {
   const [stats, setStats] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { stats: backendStats, isBackendMode } = useFleetBackend()
 
   useEffect(() => {
+    if (isBackendMode) {
+      if (backendStats) setStats(backendStats)
+      setError(null)
+      setLoading(false)
+      return
+    }
+
     const fetchStats = async () => {
       try {
         setLoading(true)
@@ -161,11 +204,13 @@ export function useFleetStats(pollInterval: number = 300000) {
 
     fetchStats()
 
-    if (DATA_SOURCE === 'database' && pollInterval > 0) {
+    if (DATA_SOURCE === 'database' && pollInterval > 0 && !isBackendMode) {
       const interval = setInterval(fetchStats, pollInterval)
       return () => clearInterval(interval)
     }
-  }, [pollInterval])
+  }, [pollInterval, isBackendMode, backendStats])
 
-  return { stats, loading, error }
+  const loadingState = isBackendMode && backendStats ? false : loading
+
+  return { stats, loading: loadingState, error }
 }

@@ -5,26 +5,25 @@ import {
   deriveScenarioFromFleetData,
   type ScenarioResult,
 } from '@/lib/cost-engine'
+import { useFleetBackend } from '@/contexts/fleet-backend-context'
 
 export type { ScenarioResult }
 export type CostTruckResult = ScenarioResult
 
 /**
- * In static/mock mode, compute cost scenarios client-side from static fleet data.
+ * Compute cost scenarios client-side from fleet data.
  */
-async function computeStaticCosts(
+function computeCostsFromFleet(
+  fleetData: { truck_id: number; gps: any; sensor: any; decision?: any }[],
   riskThreshold: number,
   n: number,
-): Promise<ScenarioResult[]> {
-  const { staticFleetData } = await import('../lib/static-fleet-data')
+): ScenarioResult[] {
   const results: ScenarioResult[] = []
-
-  for (const truck of staticFleetData) {
+  for (const truck of fleetData) {
     const scenario = deriveScenarioFromFleetData(truck)
     if (!scenario) continue
     results.push(evaluateScenario(scenario, riskThreshold, n, 42 + truck.truck_id))
   }
-
   return results
 }
 
@@ -32,13 +31,25 @@ export function useCostData(riskThreshold: number = 0.5, n: number = 20_000) {
   const [data, setData] = useState<ScenarioResult[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { fleetData: backendFleetData, isBackendMode } = useFleetBackend()
 
   const fetchCosts = useCallback(async () => {
     try {
       setLoading(true)
 
+      if (isBackendMode) {
+        if (backendFleetData && backendFleetData.length > 0) {
+          const results = computeCostsFromFleet(backendFleetData, riskThreshold, n)
+          setData(results)
+        }
+        setError(null)
+        setLoading(false)
+        return
+      }
+
       if (DATA_SOURCE === 'mock') {
-        const results = await computeStaticCosts(riskThreshold, n)
+        const { staticFleetData } = await import('../lib/static-fleet-data')
+        const results = computeCostsFromFleet(staticFleetData, riskThreshold, n)
         setData(results)
         setError(null)
         setLoading(false)
@@ -56,7 +67,7 @@ export function useCostData(riskThreshold: number = 0.5, n: number = 20_000) {
     } finally {
       setLoading(false)
     }
-  }, [riskThreshold, n])
+  }, [riskThreshold, n, isBackendMode, backendFleetData])
 
   useEffect(() => {
     fetchCosts()

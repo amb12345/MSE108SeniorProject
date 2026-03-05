@@ -1,0 +1,12 @@
+# Render Blueprint for backend server
+# In Render Dashboard: New > Blueprint; or set Root Directory to "backend" for a Web Service
+services:
+  - type: web
+    name: fleet-api
+    runtime: python
+    rootDir: .
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn server:app
+    envVars:
+      - key: DATABASE_URL
+        sync: false  # Add manually or link to Render PostgreSQL

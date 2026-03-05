@@ -9,10 +9,12 @@ import { Alerts } from "@/components/dashboard/alerts"
 import { Costs } from "@/components/dashboard/costs"
 import { EnvironmentalImpact } from "@/components/dashboard/environmental-impact"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { FleetBackendProvider, useFleetBackend } from "@/contexts/fleet-backend-context"
 
-export default function Dashboard() {
+function DashboardContent() {
   const [activeTab, setActiveTab] = useState("dashboard")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const { refresh, loading: refreshLoading } = useFleetBackend()
 
   const renderContent = () => {
     switch (activeTab) {
@@ -41,6 +43,8 @@ export default function Dashboard() {
           onTabChange={setActiveTab}
           collapsed={sidebarCollapsed}
           onCollapse={setSidebarCollapsed}
+          onRefresh={refresh}
+          refreshLoading={refreshLoading}
         />
         <main className="flex-1 overflow-auto h-screen">
           <div className="container max-w-7xl mx-auto p-6 lg:p-8">
@@ -49,5 +53,13 @@ export default function Dashboard() {
         </main>
       </div>
     </TooltipProvider>
+  )
+}
+
+export default function Dashboard() {
+  return (
+    <FleetBackendProvider>
+      <DashboardContent />
+    </FleetBackendProvider>
   )
 }
