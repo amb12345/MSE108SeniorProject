@@ -60,8 +60,7 @@ async function createTables(pool: Pool) {
       at_node BOOLEAN,
       is_facility_node BOOLEAN,
       edge_travel_time_min DOUBLE PRECISION,
-      edge_progress_frac DOUBLE PRECISION,
-      "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      edge_progress_frac DOUBLE PRECISION
     );
     CREATE INDEX IF NOT EXISTS idx_test_fleet_gps_truck_ts ON test_fleet_gps(truck_id, timestamp);
   `)
@@ -84,8 +83,7 @@ async function createTables(pool: Pool) {
       at_node BOOLEAN,
       is_facility_node BOOLEAN,
       edge_travel_time_min DOUBLE PRECISION,
-      edge_progress_frac DOUBLE PRECISION,
-      "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      edge_progress_frac DOUBLE PRECISION
     );
     CREATE INDEX IF NOT EXISTS idx_test_fleet_sensors_truck_ts ON test_fleet_sensors(truck_id, timestamp);
   `)
@@ -100,18 +98,10 @@ async function createTables(pool: Pool) {
       all_actions JSONB NOT NULL,
       reason TEXT NOT NULL,
       route JSONB NOT NULL,
-      mc_samples INTEGER NOT NULL,
-      "createdAt" TIMESTAMPTZ DEFAULT NOW()
+      mc_samples INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_test_fleet_decisions_truck_ts ON test_fleet_decisions(truck_id, timestamp);
   `)
-
-  // Add createdAt if missing (for existing tables created before Prisma schema alignment)
-  for (const table of ['test_fleet_gps', 'test_fleet_sensors', 'test_fleet_decisions']) {
-    await pool.query(`
-      ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ DEFAULT NOW();
-    `)
-  }
 }
 
 async function importGps(pool: Pool, csvPath: string) {

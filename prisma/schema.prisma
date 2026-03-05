@@ -29,7 +29,7 @@ model GpsData {
   
   @@index([truck_id, timestamp])
   @@index([timestamp])
-  @@map("test_fleet_gps")
+  @@map("gps_data")
 }
 
 // Fleet Sensor Data
@@ -56,7 +56,7 @@ model SensorData {
   
   @@index([truck_id, timestamp])
   @@index([timestamp])
-  @@map("test_fleet_sensors")
+  @@map("sensor_data")
 }
 
 // Fleet Decision Data
@@ -75,5 +75,5 @@ model DecisionData {
   
   @@index([truck_id, timestamp])
   @@index([timestamp])
-  @@map("test_fleet_decisions")
+  @@map("decision_data")
 }
