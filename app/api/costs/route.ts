@@ -5,7 +5,7 @@ import {
   type ScenarioRow,
 } from '@/lib/cost-engine'
 
-export const dynamic = 'force-static'
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   if (

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 
-export const dynamic = 'force-static'
+// Dynamic when running as server (Render + Aiven); static export uses empty fallback
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   if (

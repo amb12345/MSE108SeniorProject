@@ -1,0 +1,18 @@
+# Render Blueprint: Deploy Next.js backend + Aiven PostgreSQL
+# See RENDER_AIVEN_SETUP.md for setup instructions
+
+services:
+  - type: web
+    name: mse108-fleet-track
+    runtime: node
+    region: oregon
+
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npm start
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+        # Add your Aiven connection string in Render Dashboard after creating the service
