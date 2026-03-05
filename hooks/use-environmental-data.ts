@@ -15,7 +15,7 @@ async function computeStaticImpact(
   cargoTons: number,
   carbonPrice: number,
 ): Promise<TruckEnvironmentalImpact[]> {
-  const { staticFleetData } = await import('@/lib/static-fleet-data')
+  const { staticFleetData } = await import('../lib/static-fleet-data')
   return computeFleetEnvironmentalImpact(
     staticFleetData, riskThreshold, n, cargoTons, carbonPrice,
   )

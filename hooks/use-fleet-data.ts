@@ -45,7 +45,7 @@ export function useFleetData(truckId?: number, pollInterval: number = 60000) {
         setLoading(true)
 
         if (DATA_SOURCE === 'mock') {
-          const { staticFleetData } = await import('@/lib/static-fleet-data')
+          const { staticFleetData } = await import('../lib/static-fleet-data')
           if (truckId !== undefined) {
             const truck = (staticFleetData as any[]).find((t: any) => t.truck_id === truckId)
             setData(truck || null)
@@ -140,7 +140,7 @@ export function useFleetStats(pollInterval: number = 300000) {
         setLoading(true)
 
         if (DATA_SOURCE === 'mock') {
-          const { staticFleetStats } = await import('@/lib/static-fleet-data')
+          const { staticFleetStats } = await import('../lib/static-fleet-data')
           setStats(staticFleetStats)
           setError(null)
           setLoading(false)

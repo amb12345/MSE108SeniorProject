@@ -16,7 +16,7 @@ async function computeStaticCosts(
   riskThreshold: number,
   n: number,
 ): Promise<ScenarioResult[]> {
-  const { staticFleetData } = await import('@/lib/static-fleet-data')
+  const { staticFleetData } = await import('../lib/static-fleet-data')
   const results: ScenarioResult[] = []
 
   for (const truck of staticFleetData) {
