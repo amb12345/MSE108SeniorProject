@@ -10,6 +10,7 @@ yarn-error.log*
 out/
 build/
 dist/
+data/
 
 # Environment variables
 backend/.env

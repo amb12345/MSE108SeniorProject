@@ -94,7 +94,7 @@ export function Sidebar({
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="right" sideOffset={8}>
-                    <p>Refresh from backend</p>
+                    <p>Refresh Data</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
