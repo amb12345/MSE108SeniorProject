@@ -3,12 +3,15 @@ import { NextResponse } from 'next/server'
 export const dynamic = 'force-static'
 
 export async function GET() {
-  if (process.env.NEXT_PUBLIC_BUILD_MODE === 'static') {
+  if (
+    process.env.NEXT_PUBLIC_BUILD_MODE === 'static' ||
+    !process.env.DATABASE_URL
+  ) {
     return NextResponse.json({ counts: { trucks: 0, gpsRecords: 0, sensorRecords: 0, decisionRecords: 0 }, timeRange: {}, averages: {} })
   }
 
-  const { prisma } = await import('@/lib/db')
   try {
+    const { prisma } = await import('@/lib/db')
     const [gpsCount, sensorCount, decisionCount] = await Promise.all([
       prisma.gpsData.count(),
       prisma.sensorData.count(),

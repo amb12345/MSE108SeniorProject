@@ -8,13 +8,15 @@ import {
 export const dynamic = 'force-static'
 
 export async function GET(request: Request) {
-  if (process.env.NEXT_PUBLIC_BUILD_MODE === 'static') {
+  if (
+    process.env.NEXT_PUBLIC_BUILD_MODE === 'static' ||
+    !process.env.DATABASE_URL
+  ) {
     return NextResponse.json([])
   }
 
-  const { prisma } = await import('@/lib/db')
-
   try {
+    const { prisma } = await import('@/lib/db')
     const { searchParams } = new URL(request.url)
     const riskThreshold = parseFloat(searchParams.get('risk_threshold') ?? '0.50')
     const n = parseInt(searchParams.get('n') ?? '20000', 10)

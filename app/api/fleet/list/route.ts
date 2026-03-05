@@ -3,12 +3,15 @@ import { NextResponse } from 'next/server'
 export const dynamic = 'force-static'
 
 export async function GET(request: Request) {
-  if (process.env.NEXT_PUBLIC_BUILD_MODE === 'static') {
+  if (
+    process.env.NEXT_PUBLIC_BUILD_MODE === 'static' ||
+    !process.env.DATABASE_URL
+  ) {
     return NextResponse.json([])
   }
 
-  const { prisma } = await import('@/lib/db')
   try {
+    const { prisma } = await import('@/lib/db')
     const { searchParams } = new URL(request.url)
     const truckId = searchParams.get('truckId')
     
