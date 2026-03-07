@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { DATA_SOURCE } from '@/lib/use-data-source'
 import { useFleetBackend } from '@/contexts/fleet-backend-context'
 
 export interface FleetTruckData {
@@ -59,20 +58,6 @@ export function useFleetData(truckId?: number, pollInterval: number = 60000) {
     const fetchData = async () => {
       try {
         setLoading(true)
-
-        if (DATA_SOURCE === 'mock') {
-          const { staticFleetData } = await import('../lib/static-fleet-data')
-          if (truckId !== undefined) {
-            const truck = (staticFleetData as any[]).find((t: any) => t.truck_id === truckId)
-            setData(truck || null)
-          } else {
-            setData(staticFleetData as any)
-          }
-          setError(null)
-          setLoading(false)
-          return
-        }
-
         const url = truckId
           ? `/api/fleet/list?truckId=${truckId}`
           : '/api/fleet/list'
@@ -90,7 +75,7 @@ export function useFleetData(truckId?: number, pollInterval: number = 60000) {
 
     fetchData()
 
-    if (DATA_SOURCE === 'database' && pollInterval > 0 && !isBackendMode) {
+    if (pollInterval > 0 && !isBackendMode) {
       const interval = setInterval(fetchData, pollInterval)
       return () => clearInterval(interval)
     }
@@ -134,14 +119,6 @@ export function useFleetHistory(
     const fetchHistory = async () => {
       try {
         setLoading(true)
-
-        if (DATA_SOURCE === 'mock') {
-          setData(type === 'all' ? { gps: [], sensor: [], decision: [] } : [])
-          setError(null)
-          setLoading(false)
-          return
-        }
-
         const url = `/api/fleet/history?truckId=${truckId}&type=${type}&limit=${limit}`
         const response = await fetch(url)
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
@@ -181,15 +158,6 @@ export function useFleetStats(pollInterval: number = 300000) {
     const fetchStats = async () => {
       try {
         setLoading(true)
-
-        if (DATA_SOURCE === 'mock') {
-          const { staticFleetStats } = await import('../lib/static-fleet-data')
-          setStats(staticFleetStats)
-          setError(null)
-          setLoading(false)
-          return
-        }
-
         const response = await fetch('/api/fleet/stats')
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
         setStats(await response.json())
@@ -204,7 +172,7 @@ export function useFleetStats(pollInterval: number = 300000) {
 
     fetchStats()
 
-    if (DATA_SOURCE === 'database' && pollInterval > 0 && !isBackendMode) {
+    if (pollInterval > 0 && !isBackendMode) {
       const interval = setInterval(fetchStats, pollInterval)
       return () => clearInterval(interval)
     }

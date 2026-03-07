@@ -8,19 +8,16 @@ import {
   DEFAULT_CARGO_TONS,
   EPA_CARBON_MULTIPLIER,
 } from '@/lib/environmental-engine'
+import { fetchFleetListFromAiven } from '@/lib/fleet-from-aiven'
 
-export const dynamic = 'force-static'
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
-  if (
-    process.env.NEXT_PUBLIC_BUILD_MODE === 'static' ||
-    !process.env.DATABASE_URL
-  ) {
+  if (!process.env.DATABASE_URL) {
     return NextResponse.json([])
   }
 
   try {
-    const { prisma } = await import('@/lib/db')
     const { searchParams } = new URL(request.url)
     const riskThreshold = parseFloat(searchParams.get('risk') ?? '0.50')
     const n = parseInt(searchParams.get('n') ?? '5000', 10)
@@ -28,44 +25,27 @@ export async function GET(request: Request) {
     const carbonPrice = parseFloat(searchParams.get('carbon_price') ?? String(EPA_CARBON_MULTIPLIER))
     const seed = 42
 
-    const trucks = await prisma.gpsData.findMany({
-      distinct: ['truck_id'],
-      select: { truck_id: true },
-      orderBy: { truck_id: 'asc' },
-    })
+    const fleetData = await fetchFleetListFromAiven()
+    const trucks = Array.isArray(fleetData) ? fleetData : fleetData ? [fleetData] : []
 
     const results = await Promise.all(
-      trucks.map(async ({ truck_id }: { truck_id: number }) => {
-        const [latestGps, latestSensor, latestDecision] = await Promise.all([
-          prisma.gpsData.findFirst({
-            where: { truck_id },
-            orderBy: { timestamp: 'desc' },
-          }),
-          prisma.sensorData.findFirst({
-            where: { truck_id },
-            orderBy: { timestamp: 'desc' },
-          }),
-          prisma.decisionData.findFirst({
-            where: { truck_id },
-            orderBy: { timestamp: 'desc' },
-          }),
-        ])
-
-        if (!latestSensor) return null
-
+      trucks.map(async (truck) => {
         const scenario = deriveScenarioFromFleetData({
-          truck_id,
-          gps: latestGps,
-          sensor: latestSensor,
-          decision: latestDecision,
+          truck_id: truck.truck_id,
+          gps: truck.gps,
+          sensor: truck.sensor,
+          decision: truck.decision,
         })
         if (!scenario) return null
 
-        const costResult = evaluateScenario(scenario, riskThreshold, n, seed + truck_id)
+        const costResult = evaluateScenario(scenario, riskThreshold, n, seed + truck.truck_id)
         return computeTruckEnvironmentalImpact(
-          costResult, scenario.distance_base_miles, cargoTons, carbonPrice,
+          costResult,
+          scenario.distance_base_miles,
+          cargoTons,
+          carbonPrice
         )
-      }),
+      })
     )
 
     return NextResponse.json(results.filter(Boolean))
@@ -73,7 +53,7 @@ export async function GET(request: Request) {
     console.error('Error computing environmental impact:', error)
     return NextResponse.json(
       { error: 'Failed to compute environmental impact' },
-      { status: 500 },
+      { status: 500 }
     )
   }
 }

@@ -1,13 +1,13 @@
 /**
- * Automatically uses 'mock' for static/GitHub Pages builds,
- * and 'database' for local dev and Vercel/full-stack deploys.
+ * Always use database (Aiven). No mock data.
+ * When NEXT_PUBLIC_BACKEND_URL is set, frontend fetches from Flask backend.
+ * Otherwise, Next.js API routes fetch from Aiven directly.
  */
-export const DATA_SOURCE: 'database' | 'mock' =
-  process.env.NEXT_PUBLIC_BUILD_MODE === 'static' ? 'mock' : 'database'
+export const DATA_SOURCE = 'database' as const
 
 /**
  * Helper to determine if we should use database data
  */
 export function useDatabaseData() {
-  return DATA_SOURCE === 'database' && typeof window !== 'undefined'
+  return typeof window !== 'undefined'
 }

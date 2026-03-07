@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from 'react'
-import { DATA_SOURCE } from '@/lib/use-data-source'
 import {
   computeFleetEnvironmentalImpact,
   type TruckEnvironmentalImpact,
@@ -33,17 +32,6 @@ export function useEnvironmentalData(
           )
           setData(results)
         }
-        setError(null)
-        setLoading(false)
-        return
-      }
-
-      if (DATA_SOURCE === 'mock') {
-        const { staticFleetData } = await import('../lib/static-fleet-data')
-        const results = computeFleetEnvironmentalImpact(
-          staticFleetData, riskThreshold, n, cargoTons, carbonPrice,
-        )
-        setData(results)
         setError(null)
         setLoading(false)
         return

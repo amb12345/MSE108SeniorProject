@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from 'react'
-import { DATA_SOURCE } from '@/lib/use-data-source'
 import {
   evaluateScenario,
   deriveScenarioFromFleetData,
@@ -42,15 +41,6 @@ export function useCostData(riskThreshold: number = 0.5, n: number = 20_000) {
           const results = computeCostsFromFleet(backendFleetData, riskThreshold, n)
           setData(results)
         }
-        setError(null)
-        setLoading(false)
-        return
-      }
-
-      if (DATA_SOURCE === 'mock') {
-        const { staticFleetData } = await import('../lib/static-fleet-data')
-        const results = computeCostsFromFleet(staticFleetData, riskThreshold, n)
-        setData(results)
         setError(null)
         setLoading(false)
         return

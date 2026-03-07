@@ -1,75 +1,28 @@
 import { NextResponse } from 'next/server'
+import { fetchFleetHistoryFromAiven } from '@/lib/fleet-from-aiven'
 
-export const dynamic = 'force-static'
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
-  if (
-    process.env.NEXT_PUBLIC_BUILD_MODE === 'static' ||
-    !process.env.DATABASE_URL
-  ) {
+  if (!process.env.DATABASE_URL) {
     return NextResponse.json({ gps: [], sensor: [], decision: [] })
   }
 
   try {
-    const { prisma } = await import('@/lib/db')
     const { searchParams } = new URL(request.url)
     const truckId = searchParams.get('truckId')
-    const limit = parseInt(searchParams.get('limit') || '100')
-    const type = searchParams.get('type')
-    
+    const limit = parseInt(searchParams.get('limit') || '100', 10)
+    const type = (searchParams.get('type') || 'all') as 'gps' | 'sensor' | 'decision' | 'all'
+
     if (!truckId) {
       return NextResponse.json(
         { error: 'truckId is required' },
         { status: 400 }
       )
     }
-    
-    const parsedTruckId = parseInt(truckId)
-    
-    let data
-    switch (type) {
-      case 'gps':
-        data = await prisma.gpsData.findMany({
-          where: { truck_id: parsedTruckId },
-          orderBy: { timestamp: 'desc' },
-          take: limit,
-        })
-        break
-      case 'sensor':
-        data = await prisma.sensorData.findMany({
-          where: { truck_id: parsedTruckId },
-          orderBy: { timestamp: 'desc' },
-          take: limit,
-        })
-        break
-      case 'decision':
-        data = await prisma.decisionData.findMany({
-          where: { truck_id: parsedTruckId },
-          orderBy: { timestamp: 'desc' },
-          take: limit,
-        })
-        break
-      default:
-        const [gps, sensor, decision] = await Promise.all([
-          prisma.gpsData.findMany({
-            where: { truck_id: parsedTruckId },
-            orderBy: { timestamp: 'desc' },
-            take: limit,
-          }),
-          prisma.sensorData.findMany({
-            where: { truck_id: parsedTruckId },
-            orderBy: { timestamp: 'desc' },
-            take: limit,
-          }),
-          prisma.decisionData.findMany({
-            where: { truck_id: parsedTruckId },
-            orderBy: { timestamp: 'desc' },
-            take: limit,
-          }),
-        ])
-        return NextResponse.json({ gps, sensor, decision })
-    }
-    
+
+    const parsedTruckId = parseInt(truckId, 10)
+    const data = await fetchFleetHistoryFromAiven(parsedTruckId, type, limit)
     return NextResponse.json(data)
   } catch (error) {
     console.error('Error fetching history:', error)

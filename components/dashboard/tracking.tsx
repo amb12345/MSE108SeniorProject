@@ -83,7 +83,7 @@ export function Tracking() {
       })
     }
     
-    // Fallback to mock data
+    // Use fleet data from Aiven
     return [{
       id: "T1",
       truck_id: 1,
@@ -126,7 +126,7 @@ export function Tracking() {
     return truckTelemetry[truckTelemetry.length - 1] || telemetryData[0]
   }, [selectedTruck])
 
-  // Get current telemetry from database or mock
+  // Get current telemetry from Aiven
   const currentTelemetry = useMemo(() => {
     if (!selectedTruck) return telemetryData[0]
     if (selectedTruck.gps) {

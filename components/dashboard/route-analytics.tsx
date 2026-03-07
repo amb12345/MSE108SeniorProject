@@ -70,18 +70,8 @@ const routeOptions = [
   },
 ]
 
-const mockAvailableTrucks = [
-  { id: "T1", name: "Truck 1", driver: "John Smith", status: "available" },
-  { id: "T2", name: "Truck 2", driver: "Sarah Johnson", status: "available" },
-  { id: "T3", name: "Truck 3", driver: "Mike Davis", status: "available" },
-  { id: "T4", name: "Truck 4", driver: "Emily Brown", status: "available" },
-]
-
-const mockPastRoutes = [
-  { id: "R001", from: "Chicago", to: "Denver", date: "Jan 18", time: "7h 32m", distance: "498 mi", status: "completed" as const, truck: "Truck 1", progress: 100 },
-  { id: "R002", from: "Dallas", to: "Houston", date: "Jan 17", time: "3h 45m", distance: "239 mi", status: "in-progress" as const, truck: "Truck 2", progress: 65 },
-  { id: "R003", from: "LA", to: "Phoenix", date: "Jan 16", time: "5h 12m", distance: "372 mi", status: "queued" as const, truck: "Truck 3", progress: 0 },
-]
+const emptyTrucks: { id: string; name: string; driver: string; status: string; truck_id?: number }[] = []
+const emptyRoutes: { id: string; from: string; to: string; date: string; time: string; distance: string; status: 'completed' | 'in-progress' | 'queued'; truck: string; progress: number }[] = []
 
 const routePoints = [
   { lat: 30, lng: 20 },
@@ -96,7 +86,7 @@ export function RouteAnalytics() {
   const [toLocation, setToLocation] = useState("Los Angeles, CA")
   const [selectedOption, setSelectedOption] = useState("fastest")
   const [selectedTruck, setSelectedTruck] = useState("")
-  const [recentRoutes, setRecentRoutes] = useState(mockPastRoutes)
+  const [recentRoutes, setRecentRoutes] = useState(emptyRoutes)
   
   // Fetch database fleet data
   const { data: dbFleetData, loading } = useFleetData(undefined, 60000)
@@ -112,7 +102,7 @@ export function RouteAnalytics() {
         truck_id: truck.truck_id,
       }))
     }
-    return mockAvailableTrucks
+    return emptyTrucks
   }, [dbFleetData])
   
   // Generate route history from database
@@ -146,8 +136,8 @@ export function RouteAnalytics() {
         }
       })
     }
-    return recentRoutes
-  }, [dbFleetData, recentRoutes])
+    return emptyRoutes
+  }, [dbFleetData])
 
   const handleAssignRoute = () => {
     const selectedRouteOption = routeOptions.find(opt => opt.id === selectedOption)

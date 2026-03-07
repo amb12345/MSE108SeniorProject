@@ -1,9 +1,11 @@
 """
 Flask API server for fleet data.
-Pulls all data from test_fleet_decisions, test_fleet_gps, and test_fleet_sensors.
+Pulls all data from fleet_decisions_full_6 (single table on Aiven).
+Returns decisions, gps, sensors shaped for the frontend.
 Designed for deployment on Render.
 """
 
+import json
 import os
 from flask import Flask, jsonify
 from flask_cors import CORS
@@ -21,94 +23,147 @@ def get_db_connection():
     url = os.environ.get("DATABASE_URL")
     if not url:
         raise ValueError("DATABASE_URL environment variable is not set")
-    # Render/Aiven may use postgres://; psycopg2 needs postgresql://
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql://", 1)
     return psycopg2.connect(url, cursor_factory=RealDictCursor)
 
 
-def _serialize_row(row):
-    """Convert a RealDict row to JSON-serializable dict (handle dates, decimals, etc.)."""
+def _serialize(val):
+    """Convert value to JSON-serializable form."""
+    if val is None:
+        return None
+    if hasattr(val, "isoformat"):
+        return val.isoformat()
+    if hasattr(val, "__float__") and not isinstance(val, (int, bool)):
+        return float(val)
+    return val
+
+
+def _row_to_dict(row):
+    """Convert a RealDict row to JSON-serializable dict."""
     if row is None:
         return None
-    out = {}
-    for k, v in row.items():
-        if hasattr(v, "isoformat"):  # datetime
-            out[k] = v.isoformat()
-        elif hasattr(v, "__float__") and not isinstance(v, (int, bool)):
-            out[k] = float(v)
-        else:
-            out[k] = v
-    return out
+    return {k: _serialize(v) for k, v in row.items()}
 
 
-def fetch_fleet_decisions(conn):
+def fetch_fleet_data_from_full_table(conn):
     """
-    Pull all rows from test_fleet_decisions.
-    Schema: id, all_actions, createdAt, mc_samples, mean_cost, reason,
-            recommended_action, route, timestamp, truck_id
+    Pull all rows from fleet_decisions_full_6 and split each row into
+    decision, gps, and sensor records for the frontend API shape.
     """
-    columns = [
-        "id", "all_actions", '"createdAt"', "mc_samples", "mean_cost", "reason",
-        "recommended_action", "route", "timestamp", "truck_id",
-    ]
     with conn.cursor() as cur:
-        cur.execute(f'SELECT {", ".join(columns)} FROM test_fleet_decisions')
+        cur.execute("SELECT * FROM fleet_decisions_full_6")
         rows = cur.fetchall()
-    return [_serialize_row(r) for r in rows]
 
+    decisions = []
+    gps = []
+    sensors = []
 
-def fetch_fleet_gps(conn):
-    """
-    Pull all rows from test_fleet_gps.
-    Schema: id, at_node, createdAt, current_node, destination_node, edge_progress_frac,
-            edge_travel_time_min, is_facility_node, latitude, longitude, next_node,
-            speed_mph, t, timestamp, truck_id
-    """
-    columns = [
-        "id", "at_node", '"createdAt"', "current_node", "destination_node",
-        "edge_progress_frac", "edge_travel_time_min", "is_facility_node",
-        "latitude", "longitude", "next_node", "speed_mph", "t", "timestamp",
-        "truck_id",
-    ]
-    with conn.cursor() as cur:
-        cur.execute(f'SELECT {", ".join(columns)} FROM test_fleet_gps')
-        rows = cur.fetchall()
-    return [_serialize_row(r) for r in rows]
+    for r in rows:
+        row = dict(r)
+        truck_id = row.get("truck_id")
+        ts = row.get("ts")
+        if truck_id is None or ts is None:
+            continue
 
+        ts_str = _serialize(ts)
 
-def fetch_fleet_sensors(conn):
-    """
-    Pull all rows from test_fleet_sensors.
-    Schema: id, at_node, createdAt, current_node, destination_node, door_open,
-            edge_progress_frac, edge_travel_time_min, humidity_pct, is_facility_node,
-            next_node, remaining_slack_min, shipment_value, t, temperature_c,
-            timestamp, truck_id, violation_min
-    """
-    columns = [
-        "id", "at_node", '"createdAt"', "current_node", "destination_node",
-        "door_open", "edge_progress_frac", "edge_travel_time_min", "humidity_pct",
-        "is_facility_node", "next_node", "remaining_slack_min", "shipment_value",
-        "t", "temperature_c", "timestamp", "truck_id", "violation_min",
-    ]
-    with conn.cursor() as cur:
-        cur.execute(f'SELECT {", ".join(columns)} FROM test_fleet_sensors')
-        rows = cur.fetchall()
-    return [_serialize_row(r) for r in rows]
+        # GPS record
+        gps.append(_row_to_dict({
+            "truck_id": truck_id,
+            "timestamp": ts,
+            "latitude": row.get("latitude"),
+            "longitude": row.get("longitude"),
+            "speed_mph": row.get("speed_mph"),
+            "current_node": row.get("current_node"),
+            "next_node": row.get("chosen_next") or row.get("planned_next"),
+            "destination_node": row.get("destination_node"),
+            "edge_progress_frac": row.get("edge_progress_frac"),
+            "edge_travel_time_min": row.get("edge_travel_time_min"),
+            "is_facility_node": bool(row.get("is_facility_node")) if row.get("is_facility_node") is not None else None,
+        }))
+
+        # Sensor record
+        sensors.append(_row_to_dict({
+            "truck_id": truck_id,
+            "timestamp": ts,
+            "temperature_c": row.get("temperature_c"),
+            "humidity_pct": row.get("humidity_pct"),
+            "door_open": bool(row.get("door_open")) if row.get("door_open") is not None else None,
+            "shipment_value": row.get("shipment_value"),
+            "remaining_slack_min": row.get("remaining_slack_min"),
+            "violation_min": row.get("violation_min"),
+            "current_node": row.get("current_node"),
+            "next_node": row.get("chosen_next") or row.get("planned_next"),
+            "destination_node": row.get("destination_node"),
+            "edge_progress_frac": row.get("edge_progress_frac"),
+            "edge_travel_time_min": row.get("edge_travel_time_min"),
+            "is_facility_node": bool(row.get("is_facility_node")) if row.get("is_facility_node") is not None else None,
+        }))
+
+        # Route JSON
+        route = {
+            "current_node": row.get("current_node"),
+            "planned_next": row.get("planned_next"),
+            "chosen_next": row.get("chosen_next"),
+            "valid_outgoing_next_nodes": [],
+        }
+        try:
+            vjson = row.get("valid_outgoing_next_nodes_json")
+            if vjson:
+                route["valid_outgoing_next_nodes"] = json.loads(vjson) if isinstance(vjson, str) else vjson
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        # all_actions from all_actions_json or build from continue/reroute/detour
+        all_actions = []
+        try:
+            ajson = row.get("all_actions_json")
+            if ajson:
+                all_actions = json.loads(ajson) if isinstance(ajson, str) else ajson
+        except (json.JSONDecodeError, TypeError):
+            pass
+        if not all_actions:
+            for action_name, next_col, mean_col in [
+                ("continue", "continue_next_node", "continue_mean_total"),
+                ("reroute", "reroute_next_node", "reroute_mean_total"),
+                ("detour", "detour_next_node", "detour_mean_total"),
+            ]:
+                nn = row.get(next_col)
+                mc = row.get(mean_col)
+                if nn is not None or mc is not None:
+                    all_actions.append({"action": action_name, "next_node": nn, "mean_cost": mc})
+        if not all_actions:
+            all_actions = [{"action": row.get("recommended_action") or "continue", "mean_cost": row.get("mean_total_cost") or 0}]
+
+        mean_cost = row.get("mean_total_cost") or row.get("best_mean_cost") or 0
+        recommended = (row.get("recommended_action") or row.get("best_action") or "continue") or "continue"
+
+        # Decision record
+        decisions.append(_row_to_dict({
+            "truck_id": truck_id,
+            "timestamp": ts,
+            "recommended_action": recommended,
+            "mean_cost": mean_cost,
+            "all_actions": all_actions,
+            "reason": row.get("reason") or "",
+            "route": route,
+            "mc_samples": row.get("mc_samples") or 1000,
+        }))
+
+    return decisions, gps, sensors
 
 
 @app.route("/api/fleet-data", methods=["GET"])
 def get_fleet_data():
     """
-    Single API endpoint that returns all data from all three fleet tables.
-    Internally delegates to three functions, one per table.
+    Single API endpoint that returns all data from fleet_decisions_full_6,
+    shaped as decisions, gps, sensors for the frontend.
     """
     try:
         conn = get_db_connection()
         try:
-            decisions = fetch_fleet_decisions(conn)
-            gps = fetch_fleet_gps(conn)
-            sensors = fetch_fleet_sensors(conn)
+            decisions, gps, sensors = fetch_fleet_data_from_full_table(conn)
         finally:
             conn.close()
         return jsonify({
@@ -127,5 +182,5 @@ def health():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 3000))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=os.environ.get("FLASK_DEBUG", "false").lower() == "true")
