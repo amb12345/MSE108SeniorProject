@@ -37,9 +37,6 @@ export async function GET(request: Request) {
     return NextResponse.json(results.filter(Boolean))
   } catch (error) {
     console.error('Error computing costs:', error)
-    return NextResponse.json(
-      { error: 'Failed to compute cost analysis' },
-      { status: 500 }
-    )
+    return NextResponse.json([])
   }
 }

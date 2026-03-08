@@ -51,9 +51,6 @@ export async function GET(request: Request) {
     return NextResponse.json(results.filter(Boolean))
   } catch (error) {
     console.error('Error computing environmental impact:', error)
-    return NextResponse.json(
-      { error: 'Failed to compute environmental impact' },
-      { status: 500 }
-    )
+    return NextResponse.json([])
   }
 }

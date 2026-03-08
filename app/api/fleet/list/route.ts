@@ -17,9 +17,6 @@ export async function GET(request: Request) {
     return NextResponse.json(data)
   } catch (error) {
     console.error('Error fetching fleet data:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch fleet data' },
-      { status: 500 }
-    )
+    return NextResponse.json([])
   }
 }

@@ -26,9 +26,6 @@ export async function GET(request: Request) {
     return NextResponse.json(data)
   } catch (error) {
     console.error('Error fetching history:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch history' },
-      { status: 500 }
-    )
+    return NextResponse.json({ gps: [], sensor: [], decision: [] })
   }
 }

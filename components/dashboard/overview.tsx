@@ -86,35 +86,26 @@ export function Overview({ onNavigate }: OverviewProps) {
 
   // Calculate statistics from real data
   const stats = useMemo(() => {
-    if (dbFleetData && Array.isArray(dbFleetData) && dbStats) {
-      const totalTrucks = dbStats.counts.trucks
+    if (dbFleetData && Array.isArray(dbFleetData)) {
+      // Total Vehicles: count of unique truck_ids from Aiven
+      const totalTrucks = new Set(dbFleetData.map((t: any) => t.truck_id)).size
       
-      // Calculate route status based on decision data
-      // Priority: Check recommended_action FIRST (from decision_data table)
-      // Completed: at_node = true (from GPS data)
-      // Active (green): not at_node and recommended_action = "continue"
-      // Detour (yellow): not at_node and recommended_action = "reroute" or "detour"
-      
-      const completedTrucks = dbFleetData.filter((truck: any) => 
-        truck.gps?.at_node === true
-      )
-      
-      const activeTrucks = dbFleetData.filter((truck: any) => 
-        truck.gps?.at_node !== true &&
-        truck.decision?.recommended_action === 'continue'
-      )
-      
-      const detourTrucks = dbFleetData.filter((truck: any) => 
-        truck.gps?.at_node !== true &&
-        (truck.decision?.recommended_action === 'reroute' || 
-         truck.decision?.recommended_action === 'detour')
-      )
+      // Route status: Active = current_node != destination_node, Completed = current_node == destination_node
+      // Uses gps.current_node and gps.destination_node from Aiven
+      const activeTrucks = dbFleetData.filter((truck: any) => {
+        const curr = truck.gps?.current_node
+        const dest = truck.gps?.destination_node
+        return curr != null && dest != null && curr !== dest
+      })
+      const completedTrucks = dbFleetData.filter((truck: any) => {
+        const curr = truck.gps?.current_node
+        const dest = truck.gps?.destination_node
+        return curr != null && dest != null && curr === dest
+      })
       
       const activeRoutes = activeTrucks.length
-      const detourRoutes = detourTrucks.length
       const completedRoutes = completedTrucks.length
       const activeTruckIds = activeTrucks.map((t: any) => t.truck_id)
-      const detourTruckIds = detourTrucks.map((t: any) => t.truck_id)
       const completedTruckIds = completedTrucks.map((t: any) => t.truck_id)
       
       const criticalHumidityAlerts = dbFleetData.filter((truck: any) => 
@@ -136,12 +127,12 @@ export function Overview({ onNavigate }: OverviewProps) {
       const doorOpenAlerts = dbFleetData.filter((t: any) => t.sensor?.door_open).length
       
       // Calculate actual avg temp (no conversion needed - already in F)
-      const avgTempF = Math.round(dbStats.averages.temperature_c || 0)
+      const avgTempF = Math.round(dbStats?.averages?.temperature_c || 0)
       
       return {
         totalTrucks,
-        totalRecords: dbStats.counts.gpsRecords,
-        avgSpeed: Math.round(dbStats.averages.speed_mph || 0),
+        totalRecords: dbStats?.counts?.gpsRecords ?? 0,
+        avgSpeed: Math.round(dbStats?.averages?.speed_mph || 0),
         activeTrucks: activeRoutes,
         idleTrucks: completedRoutes,
         avgTemp: avgTempF,
@@ -154,12 +145,8 @@ export function Overview({ onNavigate }: OverviewProps) {
         totalAlerts: tempAnomalies + highHumidityAlerts + doorOpenAlerts,
         completedRoutes,
         activeRoutes,
-        detourRoutes,
-        inProgressRoutes: activeRoutes + detourRoutes,
         completedTruckIds,
         activeTruckIds,
-        detourTruckIds,
-        inProgressTruckIds: [...activeTruckIds, ...detourTruckIds],
       }
     }
     
@@ -168,9 +155,8 @@ export function Overview({ onNavigate }: OverviewProps) {
       totalTrucks: 0, totalRecords: 0, avgSpeed: 0, activeTrucks: 0, idleTrucks: 0,
       avgTemp: 0, maxTemp: 0, minTemp: 0, tempAnomalies: 0, highHumidityAlerts: 0,
       criticalHumidityAlerts: 0, warningHumidityAlerts: 0, totalAlerts: 0,
-      completedRoutes: 0, activeRoutes: 0, detourRoutes: 0, inProgressRoutes: 0,
+      completedRoutes: 0, activeRoutes: 0,
       completedTruckIds: [] as number[], activeTruckIds: [] as number[],
-      detourTruckIds: [] as number[], inProgressTruckIds: [] as number[],
     }
   }, [dbFleetData, dbStats])
 
@@ -265,7 +251,7 @@ export function Overview({ onNavigate }: OverviewProps) {
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary" />
         </Card>
 
-        {/* Route Status Card - Hoverable */}
+        {/* Route Status Card - Active (transparent) + Completed (green) */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Card className="relative overflow-hidden border-border shadow-sm transition-all hover:shadow-md cursor-pointer">
@@ -273,38 +259,31 @@ export function Overview({ onNavigate }: OverviewProps) {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <p className="text-sm font-medium text-muted-foreground">Route Status</p>
-                    <div className="mt-3 flex items-center gap-3">
+                    <div className="mt-3 flex items-center gap-4">
                       <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-success"></div>
-                        <span className="text-lg font-bold text-success">{stats.activeRoutes || 0}</span>
+                        <div className="h-2 w-2 rounded-full bg-success" />
+                        <span className="text-lg font-bold text-success">{stats.completedRoutes || 0}</span>
+                        <span className="text-xs text-muted-foreground">Completed</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-2 rounded-full border border-muted-foreground/40 bg-transparent" />
+                        <span className="text-lg font-bold text-muted-foreground">{stats.activeRoutes || 0}</span>
                         <span className="text-xs text-muted-foreground">Active</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-warning"></div>
-                        <span className="text-lg font-bold text-warning">{stats.detourRoutes || 0}</span>
-                        <span className="text-xs text-muted-foreground">Detour</span>
-                      </div>
                     </div>
-                    <p className="mt-2 text-xs text-muted-foreground">{stats.completedRoutes || 0} Completed</p>
                   </div>
                 </div>
                 <div className="flex h-3 overflow-hidden rounded-full bg-muted">
-                  {(stats.activeRoutes || 0) > 0 && (
-                    <div 
-                      className="bg-success"
-                      style={{ width: `${((stats.activeRoutes || 0) / stats.totalTrucks) * 100}%` }}
-                    />
-                  )}
-                  {(stats.detourRoutes || 0) > 0 && (
-                    <div 
-                      className="bg-warning"
-                      style={{ width: `${((stats.detourRoutes || 0) / stats.totalTrucks) * 100}%` }}
-                    />
-                  )}
                   {(stats.completedRoutes || 0) > 0 && (
-                    <div 
-                      className="bg-muted-foreground/30"
-                      style={{ width: `${((stats.completedRoutes || 0) / stats.totalTrucks) * 100}%` }}
+                    <div
+                      className="bg-success shrink-0"
+                      style={{ width: `${((stats.completedRoutes || 0) / (stats.totalTrucks || 1)) * 100}%` }}
+                    />
+                  )}
+                  {(stats.activeRoutes || 0) > 0 && (
+                    <div
+                      className="bg-transparent shrink-0"
+                      style={{ width: `${((stats.activeRoutes || 0) / (stats.totalTrucks || 1)) * 100}%` }}
                     />
                   )}
                 </div>
@@ -317,23 +296,15 @@ export function Overview({ onNavigate }: OverviewProps) {
               <div>
                 <p className="font-semibold text-success mb-1">Active ({stats.activeRoutes || 0})</p>
                 <p className="text-xs text-muted-foreground">
-                  {stats.activeTruckIds && stats.activeTruckIds.length > 0 
+                  {stats.activeTruckIds && stats.activeTruckIds.length > 0
                     ? stats.activeTruckIds.slice(0, 10).map((id: number) => `Truck ${id}`).join(', ') + (stats.activeTruckIds.length > 10 ? '...' : '')
-                    : 'None'}
-                </p>
-              </div>
-              <div>
-                <p className="font-semibold text-warning mb-1">Detour ({stats.detourRoutes || 0})</p>
-                <p className="text-xs text-muted-foreground">
-                  {stats.detourTruckIds && stats.detourTruckIds.length > 0 
-                    ? stats.detourTruckIds.slice(0, 10).map((id: number) => `Truck ${id}`).join(', ') + (stats.detourTruckIds.length > 10 ? '...' : '')
                     : 'None'}
                 </p>
               </div>
               <div>
                 <p className="font-semibold text-muted-foreground mb-1">Completed ({stats.completedRoutes || 0})</p>
                 <p className="text-xs text-muted-foreground">
-                  {stats.completedTruckIds && stats.completedTruckIds.length > 0 
+                  {stats.completedTruckIds && stats.completedTruckIds.length > 0
                     ? stats.completedTruckIds.slice(0, 10).map((id: number) => `Truck ${id}`).join(', ') + (stats.completedTruckIds.length > 10 ? '...' : '')
                     : 'None'}
                 </p>
@@ -451,45 +422,6 @@ export function Overview({ onNavigate }: OverviewProps) {
           </CardContent>
         </Card>
 
-        {/* Speed - Compact */}
-        <Card className="border-border shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-primary/10 p-2">
-                <Gauge className="h-4 w-4 text-primary" />
-              </div>
-              <div className="flex-1">
-                <p className="text-xs text-muted-foreground">Avg Speed</p>
-                <p className="text-lg font-bold text-foreground">{stats.avgSpeed} mph</p>
-              </div>
-            </div>
-            <div className="mt-2 text-xs text-muted-foreground">
-              Across fleet
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Data Points - Compact */}
-        <Card className="border-border shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-success/10 p-2">
-                <Activity className="h-4 w-4 text-success" />
-              </div>
-              <div className="flex-1">
-                <p className="text-xs text-muted-foreground">Data Points</p>
-                <p className="text-lg font-bold text-foreground">{stats.totalRecords.toLocaleString()}</p>
-              </div>
-            </div>
-            <div className="mt-2 flex items-center gap-1 text-xs text-success">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-success" />
-              </span>
-              Live telemetry
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Cost and SROI Row */}
