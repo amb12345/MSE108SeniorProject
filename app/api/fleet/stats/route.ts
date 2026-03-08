@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { fetchFleetStatsFromAiven } from '@/lib/fleet-from-aiven'
 
 export const dynamic = 'force-static'
 
@@ -13,6 +12,7 @@ export async function GET() {
   }
 
   try {
+    const { fetchFleetStatsFromAiven } = await import('@/lib/fleet-from-aiven')
     const stats = await fetchFleetStatsFromAiven()
     return NextResponse.json(stats)
   } catch (error) {

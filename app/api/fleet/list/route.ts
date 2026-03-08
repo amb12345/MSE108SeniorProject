@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { fetchFleetListFromAiven } from '@/lib/fleet-from-aiven'
 
 export const dynamic = 'force-static'
 
@@ -9,6 +8,7 @@ export async function GET(request: Request) {
   }
 
   try {
+    const { fetchFleetListFromAiven } = await import('@/lib/fleet-from-aiven')
     const { searchParams } = new URL(request.url)
     const truckIdParam = searchParams.get('truckId')
     const truckId = truckIdParam ? parseInt(truckIdParam, 10) : undefined
