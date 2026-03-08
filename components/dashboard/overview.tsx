@@ -553,7 +553,7 @@ export function Overview({ onNavigate }: OverviewProps) {
           </CardHeader>
           <CardContent>
             <div className="mb-4">
-              <p className="text-3xl font-bold text-success">
+              <p className="text-3xl font-bold text-foreground">
                 {envSummary != null
                   ? `$${Math.round(envSummary.diff_env_cost_2).toLocaleString()}`
                   : '—'}
