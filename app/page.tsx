@@ -3,8 +3,6 @@
 import { useState } from "react"
 import { Sidebar } from "@/components/dashboard/sidebar"
 import { Overview } from "@/components/dashboard/overview"
-import { Tracking } from "@/components/dashboard/tracking"
-import { RouteAnalytics } from "@/components/dashboard/route-analytics"
 import { Alerts } from "@/components/dashboard/alerts"
 import { Costs } from "@/components/dashboard/costs"
 import { EnvironmentalImpact } from "@/components/dashboard/environmental-impact"
@@ -12,18 +10,14 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { FleetBackendProvider, useFleetBackend } from "@/contexts/fleet-backend-context"
 
 function DashboardContent() {
-  const [activeTab, setActiveTab] = useState("dashboard")
+  const [activeTab, setActiveTab] = useState("home")
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const { refresh, loading: refreshLoading } = useFleetBackend()
 
   const renderContent = () => {
     switch (activeTab) {
-      case "dashboard":
+      case "home":
         return <Overview onNavigate={setActiveTab} />
-      case "tracking":
-        return <Tracking />
-      case "routes":
-        return <RouteAnalytics />
       case "telemetry":
         return <Alerts />
       case "costs":

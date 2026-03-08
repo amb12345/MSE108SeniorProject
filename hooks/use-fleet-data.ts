@@ -28,6 +28,19 @@ export interface FleetTruckData {
     mean_cost: number
     timestamp: string
     route: any
+    all_actions?: Array<{
+      action: string
+      next_node?: number
+      mean_cost?: number
+      mean_cost_components?: { operating_travel?: number; delay_service?: number; spoilage?: number }
+    }>
+    total_tonnes_carbon_saved?: number
+    environmental_value?: number
+    expected_spoilage_cost_saved?: number
+    total_sustainability_value?: number
+    diff_max_min_total_cost?: number
+    diff_environmental_value?: number
+    diff_env_spoilage_cost?: number
   } | null
 }
 
@@ -84,6 +97,50 @@ export function useFleetData(truckId?: number, pollInterval: number = 60000) {
   const loadingState = isBackendMode && backendFleetData ? false : loading
 
   return { data, loading: loadingState, error }
+}
+
+/**
+ * Hook to fetch ALL rows from fleet_decisions_full_6 (no dedup by truck).
+ * Used for cost and environmental aggregations that need to sum over every row.
+ */
+export function useAllFleetRows(pollInterval: number = 60000) {
+  const [data, setData] = useState<any[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const { isBackendMode, allDecisions } = useFleetBackend()
+
+  useEffect(() => {
+    if (isBackendMode) {
+      setData(allDecisions ?? [])
+      setError(null)
+      setLoading(false)
+      return
+    }
+
+    const fetchData = async () => {
+      try {
+        setLoading(true)
+        const res = await fetch('/api/fleet/all')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const json = await res.json()
+        setData(Array.isArray(json) ? json : [])
+        setError(null)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch fleet rows')
+        setData([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+    if (pollInterval > 0) {
+      const interval = setInterval(fetchData, pollInterval)
+      return () => clearInterval(interval)
+    }
+  }, [pollInterval, isBackendMode, allDecisions])
+
+  return { data, loading, error }
 }
 
 /**

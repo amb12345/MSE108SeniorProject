@@ -1,88 +1,24 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
-import { Truck, AlertTriangle, Thermometer, Droplets, Activity, Gauge, DollarSign, Leaf } from "lucide-react"
+import { Truck, AlertTriangle, Thermometer, Droplets, ChevronDown, ChevronUp, DollarSign, Leaf } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { FleetMap } from "./fleet-map"
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip as RechartsTooltip } from "recharts"
-import { useFleetData, useFleetStats } from "@/hooks/use-fleet-data"
-import { useCostData } from "@/hooks/use-cost-data"
-import { useEnvironmentalData } from "@/hooks/use-environmental-data"
+import { useFleetData, useFleetStats, useAllFleetRows } from "@/hooks/use-fleet-data"
 
 interface OverviewProps {
   onNavigate?: (tab: string) => void
 }
 
 export function Overview({ onNavigate }: OverviewProps) {
-  // Fetch real-time fleet data from database (polls every 60 seconds)
+  // Fetch real-time fleet data (latest per truck) and ALL rows for cost/env sums
   const { data: dbFleetData, loading: fleetLoading } = useFleetData(undefined, 60000)
+  const { data: allRows, loading: rowsLoading } = useAllFleetRows(60000)
   const { stats: dbStats, loading: statsLoading } = useFleetStats(300000) // Poll every 5 minutes
 
-  // Helper function to generate alert summaries
-  const generateAlertSummary = useMemo(() => {
-    const alerts: Array<{ type: string; title: string; truck: string }> = []
-    
-    // Use database data if available
-    if (dbFleetData && Array.isArray(dbFleetData)) {
-      dbFleetData.forEach((truck: any) => {
-        const sensor = truck.sensor
-        if (!sensor) return
-        
-        const humidityPct = parseFloat(sensor.humidity_pct) || 0
-        
-        // Temperature alerts (> 64.4°F)
-        if (sensor.temperature_c > 64.4) {
-          alerts.push({
-            type: "critical",
-            title: `High Temperature: ${sensor.temperature_c.toFixed(1)}°F`,
-            truck: `Truck ${truck.truck_id}`,
-          })
-        }
-        
-        // Humidity alerts
-        if (humidityPct >= 90) {
-          alerts.push({
-            type: "critical",
-            title: `Critical Humidity: ${humidityPct.toFixed(1)}%`,
-            truck: `Truck ${truck.truck_id}`,
-          })
-        } else if (humidityPct >= 80) {
-          alerts.push({
-            type: "warning",
-            title: `High Humidity: ${humidityPct.toFixed(1)}%`,
-            truck: `Truck ${truck.truck_id}`,
-          })
-        }
-        
-        // Door open alert
-        if (sensor.door_open) {
-          alerts.push({
-            type: "warning",
-            title: "Door Open",
-            truck: `Truck ${truck.truck_id}`,
-          })
-        }
-        
-        // Speed alerts
-        const gps = truck.gps
-        if (gps && gps.speed_mph < 5 && !truck.sensor?.at_node) {
-          alerts.push({
-            type: "warning",
-            title: "Vehicle Stopped",
-            truck: `Truck ${truck.truck_id}`,
-          })
-        }
-      })
-    }
-    
-    // Group by type
-    const critical = alerts.filter(a => a.type === "critical")
-    const warnings = alerts.filter(a => a.type === "warning")
-    
-    return { critical, warnings, all: alerts }
-  }, [dbFleetData])
+  const [alertsExpanded, setAlertsExpanded] = useState(false)
+  const [costView, setCostView] = useState<"savings" | "mean">("savings")
 
   // Calculate statistics from real data
   const stats = useMemo(() => {
@@ -108,26 +44,21 @@ export function Overview({ onNavigate }: OverviewProps) {
       const activeTruckIds = activeTrucks.map((t: any) => t.truck_id)
       const completedTruckIds = completedTrucks.map((t: any) => t.truck_id)
       
-      const criticalHumidityAlerts = dbFleetData.filter((truck: any) => 
-        truck.sensor && parseFloat(truck.sensor.humidity_pct) >= 90
-      ).length
-      
-      const warningHumidityAlerts = dbFleetData.filter((truck: any) => 
-        truck.sensor && parseFloat(truck.sensor.humidity_pct) >= 80 && parseFloat(truck.sensor.humidity_pct) < 90
-      ).length
-      
-      const highHumidityAlerts = criticalHumidityAlerts + warningHumidityAlerts
-      
-      // Count temperature alerts (> 64.4°F)
-      const tempAnomalies = dbFleetData.filter((truck: any) => 
-        truck.sensor && truck.sensor.temperature_c > 64.4
-      ).length
-      
-      // Count door open alerts
-      const doorOpenAlerts = dbFleetData.filter((t: any) => t.sensor?.door_open).length
-      
-      // Calculate actual avg temp (no conversion needed - already in F)
-      const avgTempF = Math.round(dbStats?.averages?.temperature_c || 0)
+      // Alerts: temp > 64.4, humidity > 80%, door_open true
+      const tempTruckIds = dbFleetData
+        .filter((t: any) => t.sensor && t.sensor.temperature_c > 64.4)
+        .map((t: any) => t.truck_id)
+      const humidityTruckIds = dbFleetData
+        .filter((t: any) => t.sensor && parseFloat(t.sensor.humidity_pct) > 90)
+        .map((t: any) => t.truck_id)
+      const doorOpenTruckIds = dbFleetData
+        .filter((t: any) => t.sensor?.door_open)
+        .map((t: any) => t.truck_id)
+
+      const tempAnomalies = tempTruckIds.length
+      const humidityAlerts = humidityTruckIds.length
+      const doorOpenAlerts = doorOpenTruckIds.length
+      const totalAlertsCount = tempAnomalies + humidityAlerts + doorOpenAlerts
       
       return {
         totalTrucks,
@@ -135,14 +66,13 @@ export function Overview({ onNavigate }: OverviewProps) {
         avgSpeed: Math.round(dbStats?.averages?.speed_mph || 0),
         activeTrucks: activeRoutes,
         idleTrucks: completedRoutes,
-        avgTemp: avgTempF,
-        maxTemp: avgTempF + 15, // Approximate
-        minTemp: avgTempF - 15, // Approximate
         tempAnomalies,
-        highHumidityAlerts,
-        criticalHumidityAlerts,
-        warningHumidityAlerts,
-        totalAlerts: tempAnomalies + highHumidityAlerts + doorOpenAlerts,
+        humidityAlerts,
+        doorOpenAlerts,
+        totalAlerts: totalAlertsCount,
+        tempTruckIds,
+        humidityTruckIds,
+        doorOpenTruckIds,
         completedRoutes,
         activeRoutes,
         completedTruckIds,
@@ -150,72 +80,138 @@ export function Overview({ onNavigate }: OverviewProps) {
       }
     }
     
-    // Loading state — no data yet
     return {
       totalTrucks: 0, totalRecords: 0, avgSpeed: 0, activeTrucks: 0, idleTrucks: 0,
-      avgTemp: 0, maxTemp: 0, minTemp: 0, tempAnomalies: 0, highHumidityAlerts: 0,
-      criticalHumidityAlerts: 0, warningHumidityAlerts: 0, totalAlerts: 0,
+      tempAnomalies: 0, humidityAlerts: 0, doorOpenAlerts: 0,
+      totalAlerts: 0, tempTruckIds: [] as number[], humidityTruckIds: [] as number[], doorOpenTruckIds: [] as number[],
       completedRoutes: 0, activeRoutes: 0,
       completedTruckIds: [] as number[], activeTruckIds: [] as number[],
     }
   }, [dbFleetData, dbStats])
 
-  const { data: costResults } = useCostData(0.50, 5000)
+  // Cost data: SUM over ALL rows (allRows from DB). Backend: flat decisions; Next.js: FleetListEntry with decision nested.
+  const costSavingsSummary = useMemo(() => {
+    if (!allRows || !Array.isArray(allRows)) return null
+    let sumDiffTotal = 0
+    let sumDiffOp = 0, sumDiffDelay = 0, sumDiffSpoilage = 0
+    for (const row of allRows) {
+      const d = row.decision ?? row
+      sumDiffTotal += Number(d?.diff_max_min_total_cost ?? 0)
 
-  const costSummary = useMemo(() => {
-    if (!costResults || costResults.length === 0) return null
-
-    let totalOp = 0, totalDelay = 0, totalSpoilage = 0
-    for (const truck of costResults) {
-      const bd = truck.per_action[truck.recommended_action]?.breakdown_means
-      if (!bd) continue
-      totalOp += bd.operating_travel
-      totalDelay += bd.delay_service
-      totalSpoilage += bd.spoilage
+      const actions = d?.all_actions ?? []
+      const byAction = Object.fromEntries(
+        actions.map((a: any) => [a.action?.toLowerCase?.() ?? a.action, a])
+      )
+      const cont = byAction["continue"], reroute = byAction["reroute"], detour = byAction["detour"]
+      const compC = cont?.mean_cost_components
+      const compR = reroute?.mean_cost_components
+      const compD = detour?.mean_cost_components
+      if (compC && compR && compD) {
+        const opC = compC.operating_travel ?? 0, opR = compR.operating_travel ?? 0, opD = compD.operating_travel ?? 0
+        const dC = compC.delay_service ?? 0, dR = compR.delay_service ?? 0, dD = compD.delay_service ?? 0
+        const sC = compC.spoilage ?? 0, sR = compR.spoilage ?? 0, sD = compD.spoilage ?? 0
+        sumDiffOp += Math.max(opC, opR, opD) - Math.min(opC, opR, opD)
+        sumDiffDelay += Math.max(dC, dR, dD) - Math.min(dC, dR, dD)
+        sumDiffSpoilage += Math.max(sC, sR, sD) - Math.min(sC, sR, sD)
+      }
     }
-    const total = totalOp + totalDelay + totalSpoilage
-    return { totalOp, totalDelay, totalSpoilage, total, count: costResults.length }
-  }, [costResults])
-
-  const costData = useMemo(() => {
-    if (!costSummary || costSummary.total === 0) {
-      return [
-        { name: 'Operating & Travel', value: 0, color: 'hsl(var(--primary))' },
-        { name: 'Delay & Service', value: 0, color: 'hsl(var(--warning))' },
-        { name: 'Spoilage', value: 0, color: 'hsl(var(--destructive))' },
-      ]
+    return {
+      sumDiffTotal,
+      sumDiffOp,
+      sumDiffDelay,
+      sumDiffSpoilage,
+      hasBreakdown: sumDiffOp + sumDiffDelay + sumDiffSpoilage > 0,
+      rowCount: allRows.length,
     }
-    const t = costSummary.total
-    return [
-      { name: 'Operating & Travel', value: Math.round((costSummary.totalOp / t) * 100), color: 'hsl(var(--primary))' },
-      { name: 'Delay & Service', value: Math.round((costSummary.totalDelay / t) * 100), color: 'hsl(var(--warning))' },
-      { name: 'Spoilage', value: Math.round((costSummary.totalSpoilage / t) * 100), color: 'hsl(var(--destructive))' },
+  }, [allRows])
+
+  const costMeanSummary = useMemo(() => {
+    if (!allRows || !Array.isArray(allRows)) return null
+    let totalMeanCost = 0, totalOp = 0, totalDelay = 0, totalSpoilage = 0
+    for (const row of allRows) {
+      const d = row.decision ?? row
+      const rec = d?.recommended_action?.toLowerCase?.()
+      const actions = d?.all_actions ?? []
+      const chosen = actions.find((a: any) => (a.action?.toLowerCase?.() ?? a.action) === rec)
+      const meanCost = d?.mean_cost ?? chosen?.mean_cost ?? 0
+      totalMeanCost += Number(meanCost)
+      const comp = chosen?.mean_cost_components
+      if (comp) {
+        totalOp += comp.operating_travel ?? 0
+        totalDelay += comp.delay_service ?? 0
+        totalSpoilage += comp.spoilage ?? 0
+      }
+    }
+    return {
+      totalMeanCost,
+      totalOp,
+      totalDelay,
+      totalSpoilage,
+      count: allRows.length,
+      hasBreakdown: totalOp + totalDelay + totalSpoilage > 0,
+    }
+  }, [allRows])
+
+  const costDisplayData = useMemo(() => {
+    const items = [
+      { name: 'Operating & Travel', color: 'hsl(var(--primary))' },
+      { name: 'Delay & Service', color: 'hsl(var(--warning))' },
+      { name: 'Spoilage', color: 'hsl(var(--destructive))' },
     ]
-  }, [costSummary])
-
-  const { data: envResults } = useEnvironmentalData(0.50, 5000)
+    if (costView === "savings" && costSavingsSummary && costSavingsSummary.sumDiffTotal > 0) {
+      const t = costSavingsSummary.sumDiffTotal
+      if (costSavingsSummary.hasBreakdown) {
+        return [
+          { ...items[0], value: Math.round((costSavingsSummary.sumDiffOp / t) * 100), useGreenBar: true },
+          { ...items[1], value: Math.round((costSavingsSummary.sumDiffDelay / t) * 100), useGreenBar: true },
+          { ...items[2], value: Math.round((costSavingsSummary.sumDiffSpoilage / t) * 100), useGreenBar: true },
+        ]
+      }
+      return [{ name: 'Total', color: 'hsl(var(--primary))', value: 100, useGreenBar: true }]
+    }
+    if (costView === "mean" && costMeanSummary && costMeanSummary.totalMeanCost > 0) {
+      const t = costMeanSummary.totalMeanCost
+      if (costMeanSummary.hasBreakdown) {
+        let v0 = Math.round((costMeanSummary.totalOp / t) * 100)
+        let v1 = Math.round((costMeanSummary.totalDelay / t) * 100)
+        let v2 = Math.round((costMeanSummary.totalSpoilage / t) * 100)
+        const sum = v0 + v1 + v2
+        const delta = sum - 100
+        if (delta !== 0) {
+          const idx = [v0, v1, v2].indexOf(Math.max(v0, v1, v2))
+          if (idx === 0) v0 = Math.max(0, v0 - delta)
+          else if (idx === 1) v1 = Math.max(0, v1 - delta)
+          else v2 = Math.max(0, v2 - delta)
+        }
+        return [
+          { ...items[0], value: v0, useGreenBar: true },
+          { ...items[1], value: v1, useGreenBar: true },
+          { ...items[2], value: v2, useGreenBar: true },
+        ]
+      }
+      return [{ name: 'Total', color: 'hsl(var(--primary))', value: 100, useGreenBar: true }]
+    }
+    return items.map((c) => ({ ...c, value: 0, useGreenBar: false }))
+  }, [costView, costSavingsSummary, costMeanSummary])
 
   const envSummary = useMemo(() => {
-    if (!envResults || envResults.length === 0) return null
-    let co2 = 0, envVal = 0, spoilVal = 0, susVal = 0
-    for (const t of envResults) {
-      co2 += t.total_tonnes_carbon_saved
-      envVal += t.environmental_value
-      spoilVal += t.expected_spoilage_cost_saved
-      susVal += t.total_sustainability_value
+    if (!allRows || !Array.isArray(allRows)) return null
+    let sumDiffTotal = 0, envVal = 0, spoilVal = 0
+    for (const row of allRows) {
+      const d = row.decision ?? row
+      sumDiffTotal += Number(d?.diff_max_min_total_cost ?? 0)
+      envVal += Number(d?.diff_environmental_value ?? 0)
+      spoilVal += Number(d?.diff_env_spoilage_cost ?? 0)
     }
-    const avgRoi = envResults.length > 0
-      ? envResults.reduce((s, t) => s + t.sustainability_roi_ratio, 0) / envResults.length
-      : 0
-    return { co2, envVal, spoilVal, susVal, avgRoi, count: envResults.length }
-  }, [envResults])
+    return { sumDiffTotal, envVal, spoilVal, count: allRows.length }
+  }, [allRows])
 
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Page Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
-        {(fleetLoading || statsLoading) && (
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Home</h1>
+        {(fleetLoading || statsLoading || rowsLoading) && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
             Loading data...
@@ -232,9 +228,8 @@ export function Overview({ onNavigate }: OverviewProps) {
         )}
       </div>
 
-      {/* Top Row: Status Cards */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* Total Trucks Card */}
+      {/* Row 1: Total Vehicles + Route Status - full width */}
+      <div className="grid gap-4 grid-cols-2">
         <Card className="relative overflow-hidden border-border shadow-sm transition-all hover:shadow-md">
           <CardContent className="p-6">
             <div className="flex items-start justify-between">
@@ -251,7 +246,6 @@ export function Overview({ onNavigate }: OverviewProps) {
           <div className="absolute bottom-0 left-0 right-0 h-1 bg-primary" />
         </Card>
 
-        {/* Route Status Card - Active (transparent) + Completed (green) */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Card className="relative overflow-hidden border-border shadow-sm transition-all hover:shadow-md cursor-pointer">
@@ -312,139 +306,168 @@ export function Overview({ onNavigate }: OverviewProps) {
             </div>
           </TooltipContent>
         </Tooltip>
-
-        {/* Alerts Card - Hoverable */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Card 
-              className="relative overflow-hidden border-destructive/30 bg-destructive/5 shadow-sm transition-all hover:shadow-md cursor-pointer"
-              onClick={() => onNavigate?.('telemetry')}
-            >
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-destructive/80">Alerts</p>
-                    <p className="mt-2 text-4xl font-bold tracking-tight text-destructive">{stats.totalAlerts}</p>
-                    <p className="mt-1 text-xs text-destructive/70">Click to view all</p>
-                  </div>
-                  <div className="rounded-xl bg-destructive/20 p-3">
-                    <AlertTriangle className="h-6 w-6 text-destructive" />
-                  </div>
-                </div>
-              </CardContent>
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-destructive" />
-            </Card>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-xs">
-            <div className="space-y-2">
-              {generateAlertSummary.all.length === 0 ? (
-                <p>No active alerts</p>
-              ) : (
-                <>
-                  {generateAlertSummary.critical.length > 0 && (
-                    <div>
-                      <p className="font-semibold text-destructive mb-1">Critical ({generateAlertSummary.critical.length})</p>
-                      <ul className="text-xs space-y-1 text-muted-foreground">
-                        {generateAlertSummary.critical.slice(0, 3).map((alert, idx) => (
-                          <li key={idx}>{alert.title} - {alert.truck}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {generateAlertSummary.warnings.length > 0 && (
-                    <div>
-                      <p className="font-semibold text-warning mb-1">Warnings ({generateAlertSummary.warnings.length})</p>
-                      <ul className="text-xs space-y-1 text-muted-foreground">
-                        {generateAlertSummary.warnings.slice(0, 3).map((alert, idx) => (
-                          <li key={idx}>{alert.title} - {alert.truck}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </TooltipContent>
-        </Tooltip>
       </div>
 
-      {/* Compact Sensor Metrics */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Temperature - Compact */}
-        <Card className="border-border shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-warning/10 p-2">
-                <Thermometer className="h-4 w-4 text-warning" />
+      {/* Row 2: Alerts - full width, expandable */}
+      <div className="space-y-4">
+        <Card
+          className={cn(
+            "relative overflow-hidden border-destructive/30 bg-destructive/5 shadow-sm transition-all hover:shadow-md cursor-pointer",
+            alertsExpanded && "border-destructive/50"
+          )}
+          onClick={() => setAlertsExpanded((p) => !p)}
+        >
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-medium text-destructive/80">Alerts</p>
+                <p className="mt-2 text-4xl font-bold tracking-tight text-destructive">{stats.totalAlerts}</p>
+                <p className="mt-1 text-xs text-destructive/70">
+                  {alertsExpanded ? "Click to collapse" : "Click to expand"}
+                </p>
               </div>
-              <div className="flex-1">
-                <p className="text-xs text-muted-foreground">Avg Temp</p>
-                <p className="text-lg font-bold text-foreground">{stats.avgTemp}°F</p>
-              </div>
-            </div>
-            <div className="mt-2 flex flex-col gap-0.5">
-              <div className="text-xs text-muted-foreground">
-                Range: {stats.minTemp}°F - {stats.maxTemp}°F
-              </div>
-              {stats.tempAnomalies > 0 && (
-                <div className="text-xs text-destructive">
-                  {stats.tempAnomalies} above 64.4°F
+              <div className="flex items-center gap-2">
+                <div className="rounded-xl bg-destructive/20 p-3">
+                  <AlertTriangle className="h-6 w-6 text-destructive" />
                 </div>
-              )}
+                {alertsExpanded ? (
+                  <ChevronUp className="h-5 w-5 text-destructive/70" />
+                ) : (
+                  <ChevronDown className="h-5 w-5 text-destructive/70" />
+                )}
+              </div>
             </div>
           </CardContent>
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-destructive" />
         </Card>
 
-        {/* Humidity - Compact */}
-        <Card className="border-border shadow-sm overflow-hidden">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <div className="shrink-0 rounded-lg bg-info/10 p-2">
-                <Droplets className="h-4 w-4 text-info" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs text-muted-foreground">Humidity Alerts</p>
-                <div className="mt-1 flex items-baseline gap-3">
-                  <div className="flex items-baseline gap-1">
-                    <p className="text-lg font-bold text-destructive">{stats.criticalHumidityAlerts || 0}</p>
-                    <span className="text-[10px] text-muted-foreground">Crit</span>
-                  </div>
-                  <div className="flex items-baseline gap-1">
-                    <p className="text-lg font-bold text-warning">{stats.warningHumidityAlerts || 0}</p>
-                    <span className="text-[10px] text-muted-foreground">Warn</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="mt-2 text-[11px] text-muted-foreground">
-              ≥90% critical · ≥80% warning
-            </div>
-          </CardContent>
-        </Card>
-
+        {alertsExpanded && (
+          <div className="grid gap-4 grid-cols-3">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Card className="border-border shadow-sm overflow-hidden">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-lg bg-destructive/10 p-2">
+                        <Thermometer className="h-4 w-4 text-destructive" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Temp &gt; 64.4°F</p>
+                        <p className="text-2xl font-bold text-foreground">{stats.tempAnomalies}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs">
+                <p className="font-semibold mb-1">Trucks: {stats.tempTruckIds?.length || 0}</p>
+                <p className="text-xs text-muted-foreground">
+                  {stats.tempTruckIds && stats.tempTruckIds.length > 0
+                    ? stats.tempTruckIds.slice(0, 8).map((id) => `Truck ${id}`).join(", ") +
+                      (stats.tempTruckIds.length > 8 ? "..." : "")
+                    : "None"}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Card className="border-border shadow-sm overflow-hidden">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-lg bg-warning/10 p-2">
+                        <Droplets className="h-4 w-4 text-warning" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Humidity &gt; 90%</p>
+                        <p className="text-2xl font-bold text-foreground">{stats.humidityAlerts}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs">
+                <p className="font-semibold mb-1">Trucks: {stats.humidityTruckIds?.length || 0}</p>
+                <p className="text-xs text-muted-foreground">
+                  {stats.humidityTruckIds && stats.humidityTruckIds.length > 0
+                    ? stats.humidityTruckIds.slice(0, 8).map((id) => `Truck ${id}`).join(", ") +
+                      (stats.humidityTruckIds.length > 8 ? "..." : "")
+                    : "None"}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Card className="border-border shadow-sm overflow-hidden">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-lg bg-destructive/10 p-2">
+                        <AlertTriangle className="h-4 w-4 text-destructive" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Door Open</p>
+                        <p className="text-2xl font-bold text-foreground">{stats.doorOpenAlerts}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs">
+                <p className="font-semibold mb-1">Trucks: {stats.doorOpenTruckIds?.length || 0}</p>
+                <p className="text-xs text-muted-foreground">
+                  {stats.doorOpenTruckIds && stats.doorOpenTruckIds.length > 0
+                    ? stats.doorOpenTruckIds.slice(0, 8).map((id) => `Truck ${id}`).join(", ") +
+                      (stats.doorOpenTruckIds.length > 8 ? "..." : "")
+                    : "None"}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        )}
       </div>
 
       {/* Cost and SROI Row */}
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Cost Breakdown */}
+        {/* Costs - Toggle: Cost Savings | Mean Costs */}
         <Card className="border-border shadow-sm">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold">Cost</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-base font-semibold">Costs</CardTitle>
+              <div className="flex items-center gap-1 rounded-lg bg-muted p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setCostView("savings")}
+                  className={cn(
+                    "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                    costView === "savings" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Cost Savings
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCostView("mean")}
+                  className={cn(
+                    "rounded-md px-2 py-1 text-xs font-medium transition-colors",
+                    costView === "mean" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Mean Costs
+                </button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
             <div className="mb-4">
               <p className="text-3xl font-bold text-foreground">
-                {costSummary ? `$${Math.round(costSummary.total / costSummary.count).toLocaleString()}` : '—'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {costSummary ? `Avg cost per truck (${costSummary.count} trucks)` : 'Loading cost data…'}
+                {costView === "savings" && costSavingsSummary
+                  ? `$${Math.round(costSavingsSummary.sumDiffTotal).toLocaleString()}`
+                  : costView === "mean" && costMeanSummary
+                  ? `$${Math.round(costMeanSummary.totalMeanCost).toLocaleString()}`
+                  : '—'}
               </p>
             </div>
             <div className="space-y-3">
-              {costData.map((item, idx) => (
+              {costDisplayData.map((item, idx) => (
                 <div key={idx}>
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-sm text-muted-foreground">{item.name}</span>
@@ -452,8 +475,14 @@ export function Overview({ onNavigate }: OverviewProps) {
                   </div>
                   <div className="relative h-5 w-full rounded-full bg-muted overflow-hidden">
                     <div
-                      className="absolute inset-y-0 left-0 rounded-full transition-all duration-500"
-                      style={{ width: `${item.value}%`, backgroundColor: item.color }}
+                      className={cn(
+                        "absolute inset-y-0 left-0 rounded-full transition-all duration-500",
+                        item.useGreenBar ? "bg-success" : ""
+                      )}
+                      style={{
+                        width: `${item.value}%`,
+                        ...(!item.useGreenBar ? { backgroundColor: item.color } : {}),
+                      }}
                     />
                   </div>
                 </div>
@@ -473,72 +502,49 @@ export function Overview({ onNavigate }: OverviewProps) {
           <CardContent>
             <div className="mb-4">
               <p className="text-3xl font-bold text-success">
-                {envSummary
-                  ? `$${envSummary.susVal >= 1000 ? `${(envSummary.susVal / 1000).toFixed(1)}k` : envSummary.susVal.toFixed(0)}`
+                {envSummary != null
+                  ? `$${envSummary.sumDiffTotal >= 1000 ? `${(envSummary.sumDiffTotal / 1000).toFixed(1)}k` : Math.round(envSummary.sumDiffTotal).toLocaleString()}`
                   : '—'}
               </p>
-              <p className="text-xs text-muted-foreground">
-                {envSummary
-                  ? `Total sustainability value · ${envSummary.count} trucks`
-                  : 'Loading environmental data…'}
-              </p>
+              {envSummary != null && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  diff_max_min_total_cost: {envSummary.sumDiffTotal.toLocaleString()} · diff_environmental_value: {envSummary.envVal.toLocaleString()} · diff_env_spoilage_cost: {envSummary.spoilVal.toLocaleString()}
+                </p>
+              )}
             </div>
             <div className="space-y-3">
               {(() => {
                 if (!envSummary) return null
                 const items = [
-                  { label: 'Environmental Value', value: envSummary.envVal, barClass: 'bg-success' },
-                  { label: 'Spoilage Cost Saved', value: envSummary.spoilVal, barClass: 'bg-primary' },
+                  { label: 'Environmental Value', value: envSummary.envVal },
+                  { label: 'Spoilage Cost Saved', value: envSummary.spoilVal },
                 ]
-                const maxVal = Math.max(...items.map(i => i.value), 1)
-                return items.map((item, idx) => (
-                  <div key={idx}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-muted-foreground">{item.label}</span>
-                      <span className="text-xs font-semibold tabular-nums text-foreground">
-                        ${item.value >= 1000 ? `${(item.value / 1000).toFixed(1)}k` : item.value.toFixed(2)}
-                      </span>
+                const total = envSummary.envVal + envSummary.spoilVal
+                return items.map((item, idx) => {
+                  const pct = total > 0 ? Math.round((item.value / total) * 100) : 0
+                  return (
+                    <div key={idx}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-sm text-muted-foreground">{item.label}</span>
+                        <span className="text-sm font-semibold tabular-nums text-foreground">
+                          ${item.value >= 1000 ? `${(item.value / 1000).toFixed(1)}k` : item.value.toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="relative h-5 w-full rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="absolute inset-y-0 left-0 rounded-full transition-all duration-500 bg-success"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="relative h-4 w-full rounded-full bg-muted/50 overflow-hidden">
-                      <div
-                        className={cn("absolute inset-y-0 left-0 rounded-full transition-all duration-500", item.barClass)}
-                        style={{ width: `${Math.max((item.value / maxVal) * 100, 2)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))
+                  )
+                })
               })()}
-              {envSummary && (
-                <div className="flex items-center justify-between pt-1 border-t border-border">
-                  <span className="text-xs font-medium text-muted-foreground">Total Sustainability</span>
-                  <span className="text-sm font-bold tabular-nums text-success">
-                    ${envSummary.susVal >= 1000 ? `${(envSummary.susVal / 1000).toFixed(1)}k` : envSummary.susVal.toFixed(2)}
-                  </span>
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Live Map */}
-      <Card className="border-border shadow-sm">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-semibold">Live Fleet Map</CardTitle>
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-success opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-success" />
-              </span>
-              <span className="text-xs text-success">Live</span>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <FleetMap />
-        </CardContent>
-      </Card>
     </div>
   )
 }

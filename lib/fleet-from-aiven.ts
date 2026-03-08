@@ -68,6 +68,19 @@ export interface FleetListEntry {
     mean_cost: number
     timestamp: string
     route: unknown
+    all_actions?: Array<{
+      action: string
+      next_node?: number
+      mean_cost?: number
+      mean_cost_components?: { operating_travel?: number; delay_service?: number; spoilage?: number }
+    }>
+    total_tonnes_carbon_saved?: number
+    environmental_value?: number
+    expected_spoilage_cost_saved?: number
+    total_sustainability_value?: number
+    diff_max_min_total_cost?: number
+    diff_environmental_value?: number
+    diff_env_spoilage_cost?: number
   } | null
 }
 
@@ -154,6 +167,14 @@ function rowToFleetEntry(row: FleetRow): FleetListEntry {
       mean_cost: meanCost,
       timestamp: ts,
       route,
+      all_actions: allActions,
+      total_tonnes_carbon_saved: row.total_tonnes_carbon_saved != null ? Number(row.total_tonnes_carbon_saved) : undefined,
+      environmental_value: row.environmental_value != null ? Number(row.environmental_value) : undefined,
+      expected_spoilage_cost_saved: row.expected_spoilage_cost_saved != null ? Number(row.expected_spoilage_cost_saved) : undefined,
+      total_sustainability_value: row.total_sustainability_value != null ? Number(row.total_sustainability_value) : undefined,
+      diff_max_min_total_cost: row.diff_max_min_total_cost != null ? Number(row.diff_max_min_total_cost) : undefined,
+      diff_environmental_value: row.diff_environmental_value != null ? Number(row.diff_environmental_value) : undefined,
+      diff_env_spoilage_cost: row.diff_env_spoilage_cost != null ? Number(row.diff_env_spoilage_cost) : undefined,
     },
   }
 }
