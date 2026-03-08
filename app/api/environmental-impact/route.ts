@@ -1,9 +1,4 @@
 import { NextResponse } from 'next/server'
-import {
-  fleetToEnvImpacts,
-} from '@/lib/fleet-env-adapter'
-import { DEFAULT_CARGO_TONS, EPA_CARBON_MULTIPLIER } from '@/lib/constants'
-import { fetchFleetListFromAiven } from '@/lib/fleet-from-aiven'
 
 export const dynamic = 'force-static'
 
@@ -13,6 +8,13 @@ export async function GET(request: Request) {
   }
 
   try {
+    const [{ fleetToEnvImpacts }, { DEFAULT_CARGO_TONS, EPA_CARBON_MULTIPLIER }, { fetchFleetListFromAiven }] =
+      await Promise.all([
+        import('@/lib/fleet-env-adapter'),
+        import('@/lib/constants'),
+        import('@/lib/fleet-from-aiven'),
+      ])
+
     const { searchParams } = new URL(request.url)
     const cargoTons = parseFloat(searchParams.get('cargo_tons') ?? String(DEFAULT_CARGO_TONS))
     const carbonPrice = parseFloat(searchParams.get('carbon_price') ?? String(EPA_CARBON_MULTIPLIER))
