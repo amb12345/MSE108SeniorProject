@@ -503,7 +503,7 @@ export function Overview({ onNavigate }: OverviewProps) {
                     costView === "mean" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                   )}
                 >
-                  Mean Costs
+                  Total Costs
                 </button>
               </div>
             </div>

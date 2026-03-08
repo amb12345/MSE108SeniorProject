@@ -5,14 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
   DollarSign,
-  TrendingDown,
-  TrendingUp,
   Shield,
   Zap,
   Scale,
   Truck,
 } from "lucide-react"
-import { useFleetData } from "@/hooks/use-fleet-data"
+import { useFleetData, useAllFleetRows } from "@/hooks/use-fleet-data"
 import type { FleetTruckData } from "@/hooks/use-fleet-data"
 
 const ACTION_LABELS: Record<string, string> = {
@@ -60,33 +58,60 @@ function getCurrentNode(truck: FleetTruckData): number | string {
   return Number(n)
 }
 
-// ── Summary cards (Avg, Lowest, Highest Mean) ─────────────────────────
+// ── Cost summary from allRows (matches Home Total Costs) ─────────────────
 
-function SummaryCards({
-  data,
-}: {
-  data: FleetTruckData[]
-}) {
-  const { avgMeanCost, minMean, maxMean } = useMemo(() => {
-    if (!data.length) return { avgMeanCost: 0, minMean: 0, maxMean: 0 }
-    let sum = 0
-    let min = Infinity
-    let max = -Infinity
-    for (const t of data) {
-      const m = getMeanCost(t)
-      sum += m
-      if (m < min) min = m
-      if (m > max) max = m
+function computeCostMeanSummary(rows: unknown[]) {
+  if (!rows || !Array.isArray(rows)) return null
+  let totalMeanCost = 0
+  let totalOp = 0
+  let totalDelay = 0
+  let totalSpoilage = 0
+  for (const row of rows) {
+    const d = (row as Record<string, unknown>).decision ?? row
+    const r = d as Record<string, unknown>
+    const rec = (r?.recommended_action ?? r?.best_action ?? "continue")?.toString().toLowerCase?.()
+    const meanCost = r?.mean_cost ?? r?.mean_total_cost ?? r?.best_mean_cost ?? 0
+    totalMeanCost += Number(meanCost)
+    let op = 0
+    let del = 0
+    let spoil = 0
+    if (rec === "continue") {
+      op = Number(r?.continue_mean_operating ?? 0)
+      del = Number(r?.continue_mean_delay ?? 0)
+      spoil = Number(r?.continue_mean_spoilage ?? 0)
+    } else if (rec === "reroute") {
+      op = Number(r?.reroute_mean_operating ?? 0)
+      del = Number(r?.reroute_mean_delay ?? 0)
+      spoil = Number(r?.reroute_mean_spoilage ?? 0)
+    } else if (rec === "detour") {
+      op = Number(r?.detour_mean_operating ?? 0)
+      del = Number(r?.detour_mean_delay ?? 0)
+      spoil = Number(r?.detour_mean_spoilage ?? 0)
     }
-    return {
-      avgMeanCost: sum / data.length,
-      minMean: min === Infinity ? 0 : min,
-      maxMean: max === -Infinity ? 0 : max,
+    const hasDirect = op || del || spoil
+    if (hasDirect) {
+      totalOp += op
+      totalDelay += del
+      totalSpoilage += spoil
+    } else {
+      const actions = (r?.all_actions ?? []) as Array<{ action?: string; mean_cost_components?: { operating_travel?: number; delay_service?: number; spoilage?: number } }>
+      const chosen = actions.find((a) => (a.action?.toLowerCase?.() ?? a.action) === rec)
+      const comp = chosen?.mean_cost_components
+      if (comp) {
+        totalOp += comp.operating_travel ?? 0
+        totalDelay += comp.delay_service ?? 0
+        totalSpoilage += comp.spoilage ?? 0
+      }
     }
-  }, [data])
+  }
+  return { totalMeanCost, totalOp, totalDelay, totalSpoilage }
+}
 
+// ── Summary tiles: Total Cost + 3 breakdown tiles ──────────────────────
+
+function CostSummaryTiles({ summary }: { summary: NonNullable<ReturnType<typeof computeCostMeanSummary>> }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-3 max-w-2xl mx-auto">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 max-w-4xl mx-auto">
       <Card className="border-border shadow-sm">
         <CardContent className="p-4">
           <div className="flex items-center gap-3">
@@ -94,9 +119,9 @@ function SummaryCards({
               <DollarSign className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Avg Cost (chosen)</p>
+              <p className="text-xs text-muted-foreground">Total Cost</p>
               <p className="text-lg font-bold tabular-nums text-foreground">
-                {formatCostFull(avgMeanCost)}
+                {formatCostFull(summary.totalMeanCost)}
               </p>
             </div>
           </div>
@@ -105,13 +130,28 @@ function SummaryCards({
       <Card className="border-border shadow-sm">
         <CardContent className="p-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-success/10 p-2">
-              <TrendingDown className="h-4 w-4 text-success" />
+            <div className="rounded-lg bg-primary/10 p-2">
+              <DollarSign className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Lowest Mean</p>
-              <p className="text-lg font-bold tabular-nums text-success">
-                {formatCostFull(minMean)}
+              <p className="text-xs text-muted-foreground">Operating & Travel</p>
+              <p className="text-lg font-bold tabular-nums text-foreground">
+                {formatCostFull(summary.totalOp)}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+      <Card className="border-border shadow-sm">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-warning/10 p-2">
+              <DollarSign className="h-4 w-4 text-warning" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Delay & Service</p>
+              <p className="text-lg font-bold tabular-nums text-foreground">
+                {formatCostFull(summary.totalDelay)}
               </p>
             </div>
           </div>
@@ -121,12 +161,12 @@ function SummaryCards({
         <CardContent className="p-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-destructive/10 p-2">
-              <TrendingUp className="h-4 w-4 text-destructive" />
+              <DollarSign className="h-4 w-4 text-destructive" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Highest Mean</p>
-              <p className="text-lg font-bold tabular-nums text-destructive">
-                {formatCostFull(maxMean)}
+              <p className="text-xs text-muted-foreground">Spoilage</p>
+              <p className="text-lg font-bold tabular-nums text-foreground">
+                {formatCostFull(summary.totalSpoilage)}
               </p>
             </div>
           </div>
@@ -199,6 +239,12 @@ export function Costs() {
   const [riskThreshold, setRiskThreshold] = useState(0.5)
 
   const { data: fleetData, loading, error } = useFleetData()
+  const { data: allRows } = useAllFleetRows(60000)
+
+  const costSummary = useMemo(
+    () => computeCostMeanSummary(allRows ?? []),
+    [allRows]
+  )
 
   const fleetList = useMemo(() => {
     if (!fleetData) return []
@@ -232,9 +278,9 @@ export function Costs() {
         </div>
       </div>
 
-      {/* Summary cards at top - centered */}
-      {fleetList.length > 0 && (
-        <SummaryCards data={fleetList} />
+      {/* Cost summary tiles: Total Cost + breakdown (matches Home Total Costs) */}
+      {costSummary && (
+        <CostSummaryTiles summary={costSummary} />
       )}
 
       {/* Risk Threshold - no Simulations */}
