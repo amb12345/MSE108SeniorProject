@@ -1,17 +1,16 @@
 import { useEffect, useState, useCallback } from 'react'
 import {
-  computeFleetEnvironmentalImpact,
+  fleetToEnvImpacts,
   type TruckEnvironmentalImpact,
-  DEFAULT_CARGO_TONS,
-  EPA_CARBON_MULTIPLIER,
-} from '@/lib/environmental-engine'
+} from '@/lib/fleet-env-adapter'
+import { DEFAULT_CARGO_TONS, EPA_CARBON_MULTIPLIER } from '@/lib/constants'
 import { useFleetBackend } from '@/contexts/fleet-backend-context'
 
 export type { TruckEnvironmentalImpact }
 
 export function useEnvironmentalData(
-  riskThreshold: number = 0.5,
-  n: number = 5_000,
+  _riskThreshold: number = 0.5,
+  _n: number = 5_000,
   cargoTons: number = DEFAULT_CARGO_TONS,
   carbonPrice: number = EPA_CARBON_MULTIPLIER,
 ) {
@@ -27,9 +26,7 @@ export function useEnvironmentalData(
 
       if (isBackendMode) {
         if (backendFleetData && backendFleetData.length > 0) {
-          const results = computeFleetEnvironmentalImpact(
-            backendFleetData, riskThreshold, n, cargoTons, carbonPrice,
-          )
+          const results = fleetToEnvImpacts(backendFleetData, cargoTons, carbonPrice)
           setData(results)
         }
         setError(null)
@@ -53,7 +50,7 @@ export function useEnvironmentalData(
     } finally {
       setLoading(false)
     }
-  }, [riskThreshold, n, cargoTons, carbonPrice, isBackendMode, backendFleetData])
+  }, [cargoTons, carbonPrice, isBackendMode, backendFleetData])
 
   useEffect(() => { fetch_() }, [fetch_])
 

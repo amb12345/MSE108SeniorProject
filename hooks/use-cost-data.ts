@@ -1,30 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
-import {
-  evaluateScenario,
-  deriveScenarioFromFleetData,
-  type ScenarioResult,
-} from '@/lib/cost-engine'
+import { fleetToCostResults, type CostTruckResult } from '@/lib/fleet-cost-adapter'
 import { useFleetBackend } from '@/contexts/fleet-backend-context'
 
-export type { ScenarioResult }
-export type CostTruckResult = ScenarioResult
-
-/**
- * Compute cost scenarios client-side from fleet data.
- */
-function computeCostsFromFleet(
-  fleetData: { truck_id: number; gps: any; sensor: any; decision?: any }[],
-  riskThreshold: number,
-  n: number,
-): ScenarioResult[] {
-  const results: ScenarioResult[] = []
-  for (const truck of fleetData) {
-    const scenario = deriveScenarioFromFleetData(truck)
-    if (!scenario) continue
-    results.push(evaluateScenario(scenario, riskThreshold, n, 42 + truck.truck_id))
-  }
-  return results
-}
+export type { CostTruckResult }
 
 export function useCostData(riskThreshold: number = 0.5, n: number = 20_000) {
   const [data, setData] = useState<ScenarioResult[]>([])
@@ -38,7 +16,7 @@ export function useCostData(riskThreshold: number = 0.5, n: number = 20_000) {
 
       if (isBackendMode) {
         if (backendFleetData && backendFleetData.length > 0) {
-          const results = computeCostsFromFleet(backendFleetData, riskThreshold, n)
+          const results = fleetToCostResults(backendFleetData)
           setData(results)
         }
         setError(null)

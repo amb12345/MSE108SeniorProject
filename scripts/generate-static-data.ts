@@ -95,17 +95,7 @@ async function main() {
     },
   }
 
-  const output = `// Auto-generated from CSV data — do not edit manually
-// Generated at ${new Date().toISOString()}
-
-export const staticFleetData: any[] = ${JSON.stringify(fleetData, null, 2)}
-
-export const staticFleetStats: any = ${JSON.stringify(stats, null, 2)}
-`
-
-  const outPath = path.join(__dirname, '../lib/static-fleet-data.ts')
-  fs.writeFileSync(outPath, output)
-  console.log(`\nGenerated ${outPath}`)
+  console.log('\nParsed fleet data (static-fleet-data.ts removed; fleet data now from Aiven)')
   console.log(`  ${fleetData.length} trucks`)
   console.log(`  Avg temp: ${avgTemp.toFixed(1)}°F, Avg humidity: ${avgHumidity.toFixed(1)}%, Avg speed: ${avgSpeed.toFixed(1)} mph`)
 }

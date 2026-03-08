@@ -1,25 +1,81 @@
 /**
- * Generates data/fleet_cost_scenarios.csv from the static fleet data.
+ * Generates data/fleet_cost_scenarios.csv from fleet CSV data.
  * This CSV is consumed by the Python cost_engine.py for standalone analysis.
  *
  * Usage:  node scripts/generate-cost-scenarios.mjs
  */
 
-import { readFileSync, writeFileSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
+const dataDir = join(ROOT, 'data')
 
-// Read the static fleet data TS file and extract the JSON array
-const raw = readFileSync(join(ROOT, 'lib/static-fleet-data.ts'), 'utf-8')
-const match = raw.match(/export const staticFleetData: any\[\] = (\[[\s\S]*\])/)
-if (!match) {
-  console.error('Could not parse static-fleet-data.ts')
-  process.exit(1)
+function parseKafkaCSV(filePath) {
+  const content = readFileSync(filePath, 'utf-8')
+  const lines = content.trim().split('\n').slice(1)
+  const records = []
+  for (const line of lines) {
+    const valueMatch = line.match(/"\{.*?\}"/)
+    if (!valueMatch) continue
+    try {
+      const json = valueMatch[0].slice(1, -1).replace(/""/g, '"')
+      records.push(JSON.parse(json))
+    } catch { /* skip malformed */ }
+  }
+  return records
 }
-const fleetData = JSON.parse(match[1])
+
+function getLatestPerTruck(records) {
+  const latest = new Map()
+  for (const record of records) {
+    const id = record.truck_id
+    if (!latest.has(id)) {
+      latest.set(id, record)
+    } else {
+      const existing = latest.get(id)
+      if (new Date(record.timestamp) > new Date(existing.timestamp)) {
+        latest.set(id, record)
+      }
+    }
+  }
+  return latest
+}
+
+// Build fleetData from CSV files (same structure as old static-fleet-data)
+function readCsvIfExists(path) {
+  if (!existsSync(path)) return []
+  try {
+    return parseKafkaCSV(path)
+  } catch {
+    return []
+  }
+}
+
+const gpsRecords = readCsvIfExists(join(dataDir, 'fleet.gps.csv'))
+const sensorRecords = readCsvIfExists(join(dataDir, 'fleet sensors.csv'))
+const decisionRecords = readCsvIfExists(join(dataDir, 'fleet decisions.csv'))
+
+const latestGps = getLatestPerTruck(gpsRecords)
+const latestSensor = getLatestPerTruck(sensorRecords)
+const latestDecision = getLatestPerTruck(decisionRecords)
+
+const allTruckIds = new Set([
+  ...latestGps.keys(),
+  ...latestSensor.keys(),
+  ...latestDecision.keys(),
+])
+
+const fleetData = Array.from(allTruckIds)
+  .sort((a, b) => a - b)
+  .map((truck_id) => ({
+    truck_id,
+    gps: latestGps.get(truck_id) || null,
+    sensor: latestSensor.get(truck_id) || null,
+    decision: latestDecision.get(truck_id) || null,
+  }))
 
 const COLUMNS = [
   'truck_id', 'node_id', 'minutes_above_temp', 'future_violation_if_continue',

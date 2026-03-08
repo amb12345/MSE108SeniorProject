@@ -26,7 +26,7 @@ import {
   type TruckEnvironmentalImpact,
 } from "@/hooks/use-environmental-data"
 import { cn } from "@/lib/utils"
-import { EPA_CARBON_MULTIPLIER, DEFAULT_CARGO_TONS } from "@/lib/environmental-engine"
+import { EPA_CARBON_MULTIPLIER, DEFAULT_CARGO_TONS } from "@/lib/constants"
 
 // ── Helpers ──────────────────────────────────────────────────────────
 

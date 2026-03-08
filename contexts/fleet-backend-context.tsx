@@ -149,6 +149,18 @@ function rowToExtracts(row: Record<string, unknown>): {
     "diff_max_min_total_cost",
     "diff_environmental_value",
     "diff_env_spoilage_cost",
+    "continue_mean_operating",
+    "reroute_mean_operating",
+    "detour_mean_operating",
+    "continue_mean_delay",
+    "reroute_mean_delay",
+    "detour_mean_delay",
+    "continue_mean_spoilage",
+    "reroute_mean_spoilage",
+    "detour_mean_spoilage",
+    "continue_mean_total",
+    "reroute_mean_total",
+    "detour_mean_total",
   ]) {
     if ((row as Record<string, unknown>)[key] != null) {
       decision[key] = (row as Record<string, unknown>)[key]

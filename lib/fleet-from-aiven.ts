@@ -175,6 +175,16 @@ function rowToFleetEntry(row: FleetRow): FleetListEntry {
       diff_max_min_total_cost: row.diff_max_min_total_cost != null ? Number(row.diff_max_min_total_cost) : undefined,
       diff_environmental_value: row.diff_environmental_value != null ? Number(row.diff_environmental_value) : undefined,
       diff_env_spoilage_cost: row.diff_env_spoilage_cost != null ? Number(row.diff_env_spoilage_cost) : undefined,
+      // Cost breakdown from DB (for adapters)
+      continue_mean_operating: (row as Record<string, unknown>).continue_mean_operating != null ? Number((row as Record<string, unknown>).continue_mean_operating) : undefined,
+      reroute_mean_operating: (row as Record<string, unknown>).reroute_mean_operating != null ? Number((row as Record<string, unknown>).reroute_mean_operating) : undefined,
+      detour_mean_operating: (row as Record<string, unknown>).detour_mean_operating != null ? Number((row as Record<string, unknown>).detour_mean_operating) : undefined,
+      continue_mean_delay: (row as Record<string, unknown>).continue_mean_delay != null ? Number((row as Record<string, unknown>).continue_mean_delay) : undefined,
+      reroute_mean_delay: (row as Record<string, unknown>).reroute_mean_delay != null ? Number((row as Record<string, unknown>).reroute_mean_delay) : undefined,
+      detour_mean_delay: (row as Record<string, unknown>).detour_mean_delay != null ? Number((row as Record<string, unknown>).detour_mean_delay) : undefined,
+      continue_mean_spoilage: (row as Record<string, unknown>).continue_mean_spoilage != null ? Number((row as Record<string, unknown>).continue_mean_spoilage) : undefined,
+      reroute_mean_spoilage: (row as Record<string, unknown>).reroute_mean_spoilage != null ? Number((row as Record<string, unknown>).reroute_mean_spoilage) : undefined,
+      detour_mean_spoilage: (row as Record<string, unknown>).detour_mean_spoilage != null ? Number((row as Record<string, unknown>).detour_mean_spoilage) : undefined,
     },
   }
 }
