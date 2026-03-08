@@ -6,6 +6,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip
 import { Truck, AlertTriangle, Thermometer, Droplets, ChevronDown, ChevronUp, DollarSign, Leaf } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useFleetData, useFleetStats, useAllFleetRows } from "@/hooks/use-fleet-data"
+import { computeEnvDiffsSummary } from "@/lib/compute-env-diffs"
 
 interface OverviewProps {
   onNavigate?: (tab: string) => void
@@ -248,14 +249,13 @@ export function Overview({ onNavigate }: OverviewProps) {
 
   const envSummary = useMemo(() => {
     if (!allRows || !Array.isArray(allRows)) return null
-    let sumDiffTotal = 0, envVal = 0, spoilVal = 0
-    for (const row of allRows) {
-      const d = row.decision ?? row
-      sumDiffTotal += Number(d?.diff_max_min_total_cost ?? 0)
-      envVal += Number(d?.diff_environmental_value ?? 0)
-      spoilVal += Number(d?.diff_env_spoilage_cost ?? 0)
+    const summary = computeEnvDiffsSummary(allRows)
+    return {
+      diff_env_cost_2: summary.diff_env_cost_2,
+      diff_environmental_value: summary.diff_environmental_value,
+      diff_env_spoilage_cost: summary.diff_env_spoilage_cost,
+      count: summary.count,
     }
-    return { sumDiffTotal, envVal, spoilVal, count: allRows.length }
   }, [allRows])
 
   return (
@@ -555,16 +555,16 @@ export function Overview({ onNavigate }: OverviewProps) {
             <div className="mb-4">
               <p className="text-3xl font-bold text-success">
                 {envSummary != null
-                  ? `$${envSummary.envVal >= 1000 ? `${(envSummary.envVal / 1000).toFixed(1)}k` : Math.round(envSummary.envVal).toLocaleString()}`
+                  ? `$${Math.round(envSummary.diff_env_cost_2).toLocaleString()}`
                   : '—'}
               </p>
             </div>
             <div className="space-y-3">
               {(() => {
                 if (!envSummary) return null
-                const total = envSummary.envVal + envSummary.spoilVal
-                let pctEnv = total > 0 ? Math.round((envSummary.envVal / total) * 100) : 0
-                let pctSpoil = total > 0 ? Math.round((envSummary.spoilVal / total) * 100) : 0
+                const total = envSummary.diff_environmental_value + envSummary.diff_env_spoilage_cost
+                let pctEnv = total > 0 ? Math.round((envSummary.diff_environmental_value / total) * 100) : 0
+                let pctSpoil = total > 0 ? Math.round((envSummary.diff_env_spoilage_cost / total) * 100) : 0
                 const sum = pctEnv + pctSpoil
                 if (sum !== 100 && (pctEnv > 0 || pctSpoil > 0)) {
                   const delta = sum - 100
@@ -575,14 +575,16 @@ export function Overview({ onNavigate }: OverviewProps) {
                   }
                 }
                 const items = [
-                  { label: 'Environmental Value', value: envSummary.envVal, pct: pctEnv },
-                  { label: 'Spoilage Cost Saved', value: envSummary.spoilVal, pct: pctSpoil },
+                  { label: 'Environmental Value', value: envSummary.diff_environmental_value, pct: pctEnv },
+                  { label: 'Spoilage Cost', value: envSummary.diff_env_spoilage_cost, pct: pctSpoil },
                 ]
                 return items.map((item, idx) => (
                   <div key={idx}>
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-sm text-muted-foreground">{item.label}</span>
-                      <span className="text-sm font-semibold tabular-nums text-foreground">{item.pct}%</span>
+                      <span className="text-sm font-semibold tabular-nums text-foreground">
+                        {item.pct}%
+                      </span>
                     </div>
                     <div className="relative h-5 w-full rounded-full overflow-hidden border border-border/40 bg-transparent">
                       <div
