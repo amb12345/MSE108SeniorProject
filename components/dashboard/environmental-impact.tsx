@@ -6,11 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import {
   Leaf,
   Truck,
-  TrendingDown,
-  DollarSign,
   ChevronRight,
-  Gauge,
-  Settings2,
 } from "lucide-react"
 import {
   BarChart,
@@ -21,20 +17,28 @@ import {
   Tooltip as RechartsTooltip,
   Cell,
 } from "recharts"
+import { useAllFleetRows } from "@/hooks/use-fleet-data"
 import {
-  useEnvironmentalData,
-  type TruckEnvironmentalImpact,
-} from "@/hooks/use-environmental-data"
+  computeEnvDiffsSummary,
+  computeEnvDiffsForRow,
+} from "@/lib/compute-env-diffs"
 import { cn } from "@/lib/utils"
-import { EPA_CARBON_MULTIPLIER, DEFAULT_CARGO_TONS } from "@/lib/constants"
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-const fmt$ = (v: number) =>
-  v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v.toFixed(2)}`
+const fmt$ = (v: number) => `$${Math.round(v).toLocaleString()}`
 
-const fmtTonnes = (v: number) =>
-  v >= 1 ? `${v.toFixed(2)} t` : `${(v * 1000).toFixed(1)} kg`
+const BAR_GREEN = "#22c55e"
+
+export interface TruckEnvRow {
+  truck_id: number
+  best_action: string
+  diff_env_cost_2: number
+  diff_environmental_value: number
+  diff_env_spoilage_cost: number
+}
+
+// ── Per-truck expandable row ─────────────────────────────────────────
 
 const ACTION_LABELS: Record<string, string> = {
   continue: "Continue",
@@ -42,63 +46,25 @@ const ACTION_LABELS: Record<string, string> = {
   detour: "Detour",
 }
 
-const ACTION_COLORS: Record<string, string> = {
-  continue: "hsl(var(--success))",
-  reroute: "hsl(var(--info))",
-  detour: "hsl(var(--warning))",
-}
-
-// ── Summary Card ─────────────────────────────────────────────────────
-
-function SummaryCard({
-  label,
-  value,
-  sub,
-  icon: Icon,
-  color,
-}: {
-  label: string
-  value: string
-  sub: string
-  icon: React.ElementType
-  color: string
-}) {
-  return (
-    <Card className="border-border shadow-sm">
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs font-medium text-muted-foreground">{label}</p>
-            <p className="mt-1 text-2xl font-bold tracking-tight text-foreground">
-              {value}
-            </p>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">{sub}</p>
-          </div>
-          <div className={cn("rounded-xl p-2.5", `bg-${color}/10`)}>
-            <Icon className={cn("h-5 w-5", `text-${color}`)} />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-// ── Per-truck expandable row ─────────────────────────────────────────
-
-function TruckRow({ truck }: { truck: TruckEnvironmentalImpact }) {
+function TruckRow({ truck }: { truck: TruckEnvRow }) {
   const [open, setOpen] = useState(false)
-  const hasSavings = truck.total_sustainability_value > 0
+  const hasSavings = truck.diff_env_cost_2 > 0
+
+  const actionLabel =
+    truck.best_action
+      ? ACTION_LABELS[truck.best_action.toLowerCase()] ?? truck.best_action
+      : "—"
 
   const contributionData = [
     {
-      name: "Environmental",
-      value: Math.max(0, truck.environmental_value),
-      color: "hsl(var(--success))",
+      name: "Environmental Value",
+      value: Math.max(0, truck.diff_environmental_value),
+      color: BAR_GREEN,
     },
     {
-      name: "Spoilage Saved",
-      value: Math.max(0, truck.expected_spoilage_cost_saved),
-      color: "hsl(var(--primary))",
+      name: "Spoilage Cost",
+      value: Math.max(0, truck.diff_env_spoilage_cost),
+      color: BAR_GREEN,
     },
   ]
 
@@ -126,40 +92,17 @@ function TruckRow({ truck }: { truck: TruckEnvironmentalImpact }) {
           <p className="text-sm font-semibold text-foreground">
             Truck {truck.truck_id}
           </p>
-          <p className="text-[10px] text-muted-foreground">
-            Node {truck.node_id}
-          </p>
         </div>
 
-        {/* Action badges */}
+        {/* Best next action */}
         <div className="flex items-center gap-1.5">
-          <Badge
-            variant="outline"
-            className="text-[10px] bg-muted/50 border-border"
-          >
-            {ACTION_LABELS[truck.baseline_action] ?? truck.baseline_action}
-          </Badge>
-          <span className="text-muted-foreground text-xs">→</span>
-          <Badge
-            variant="outline"
-            className="text-[10px]"
-            style={{
-              borderColor: ACTION_COLORS[truck.chosen_action],
-              color: ACTION_COLORS[truck.chosen_action],
-            }}
-          >
-            {ACTION_LABELS[truck.chosen_action] ?? truck.chosen_action}
+          <Badge variant="outline" className="text-[10px]">
+            {actionLabel}
           </Badge>
         </div>
 
-        {/* Key metrics on the right */}
+        {/* Value on the right */}
         <div className="hidden sm:flex items-center gap-5 ml-auto text-xs text-muted-foreground">
-          <div className="text-right">
-            <span className="text-muted-foreground">CO₂ </span>
-            <span className="font-semibold tabular-nums text-foreground">
-              {fmtTonnes(truck.total_tonnes_carbon_saved)}
-            </span>
-          </div>
           <div className="text-right min-w-[70px]">
             <span className="text-muted-foreground">Value </span>
             <span
@@ -168,289 +111,174 @@ function TruckRow({ truck }: { truck: TruckEnvironmentalImpact }) {
                 hasSavings ? "text-success" : "text-muted-foreground"
               )}
             >
-              {fmt$(truck.total_sustainability_value)}
+              {fmt$(truck.diff_env_cost_2)}
             </span>
           </div>
         </div>
       </button>
 
-      {/* Expanded detail panel */}
+      {/* Expanded: SUSTAINABILITY VALUE BREAKDOWN */}
       {open && (
         <div className="border-t border-border bg-card p-4 space-y-4">
-          <div className="grid gap-4 sm:grid-cols-3">
-            {/* Left: Distance & Ton-miles */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Distance & Cargo
-              </h4>
-              <div className="space-y-2">
-                <Metric
-                  label="Distance Saved"
-                  value={`${truck.distance_saved.toFixed(1)} mi`}
-                />
-                <Metric
-                  label="Ton-Miles Saved"
-                  value={`${truck.ton_miles_saved.toFixed(1)}`}
-                />
-                <Metric
-                  label="Cargo Weight"
-                  value={`${truck.assumptions.cargo_tons} tons`}
-                />
-              </div>
-            </div>
-
-            {/* Middle: Carbon & Environmental */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Carbon & Environmental
-              </h4>
-              <div className="space-y-2">
-                <Metric
-                  label="CO₂ Saved"
-                  value={fmtTonnes(truck.total_tonnes_carbon_saved)}
-                />
-                <Metric
-                  label="Environmental Value"
-                  value={fmt$(truck.environmental_value)}
-                  highlight="success"
-                />
-                <Metric
-                  label="Spoilage Cost Saved"
-                  value={fmt$(truck.expected_spoilage_cost_saved)}
-                  highlight="primary"
-                />
-              </div>
-            </div>
-
-            {/* Right: Sustainability & ROI */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Sustainability & ROI
-              </h4>
-              <div className="space-y-2">
-                <Metric
-                  label="Total Sustainability Value"
-                  value={fmt$(truck.total_sustainability_value)}
-                  highlight={hasSavings ? "success" : undefined}
-                />
-                <Metric
-                  label="ROI Ratio"
-                  value={`${truck.sustainability_roi_ratio.toFixed(2)}x`}
-                />
-                <Metric
-                  label="Cost Δ vs Baseline"
-                  value={`${truck.cost_difference_vs_baseline >= 0 ? "+" : ""}${fmt$(truck.cost_difference_vs_baseline)}`}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Contribution bar chart */}
-          <div className="pt-2">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+          <div>
+            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
               Sustainability Value Breakdown
             </h4>
-            <div className="h-[80px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={contributionData} layout="vertical" barSize={18}>
-                  <XAxis
-                    type="number"
-                    tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(v: number) => fmt$(v)}
-                  />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
-                    axisLine={false}
-                    tickLine={false}
-                    width={100}
-                  />
-                  <RechartsTooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                      fontSize: "11px",
-                    }}
-                    formatter={(value: number) => [fmt$(value), "Value"]}
-                  />
-                  <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                    {contributionData.map((entry, idx) => (
-                      <Cell key={idx} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between py-2 border-b border-border/50">
+                <span className="text-sm text-muted-foreground">
+                  Total
+                </span>
+                <span className="text-lg font-bold tabular-nums text-foreground">
+                  {fmt$(truck.diff_env_cost_2)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">
+                  Environmental Value
+                </span>
+                <span className="text-sm font-semibold tabular-nums text-success">
+                  {fmt$(truck.diff_environmental_value)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">
+                  Spoilage Cost
+                </span>
+                <span className="text-sm font-semibold tabular-nums text-foreground">
+                  {fmt$(truck.diff_env_spoilage_cost)}
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Assumptions */}
-          <div className="text-[10px] text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 pt-1 border-t border-border">
-            <span>
-              Carbon price: ${truck.assumptions.epa_carbon_multiplier}/tCO₂
-            </span>
-            <span>
-              Emissions: {truck.assumptions.emissions_factor_g_per_ton_mile} g
-              CO₂/ton-mi
-            </span>
-            <span>
-              Original: {truck.assumptions.original_distance_miles.toFixed(1)} mi
-            </span>
-            <span>
-              Optimised: {truck.assumptions.optimized_distance_miles.toFixed(1)}{" "}
-              mi
-            </span>
+          {/* Bar chart breakdown */}
+          <div className="h-[80px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={contributionData} layout="vertical" barSize={18}>
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v: number) => fmt$(v)}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  axisLine={false}
+                  tickLine={false}
+                  width={120}
+                />
+                <RechartsTooltip
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
+                    fontSize: "11px",
+                  }}
+                  formatter={(value: number) => [fmt$(value), "Value"]}
+                />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                  {contributionData.map((entry, idx) => (
+                    <Cell key={idx} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function Metric({
-  label,
-  value,
-  highlight,
-}: {
-  label: string
-  value: string
-  highlight?: "success" | "primary" | "destructive"
-}) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span
-        className={cn(
-          "text-sm font-semibold tabular-nums",
-          highlight ? `text-${highlight}` : "text-foreground"
-        )}
-      >
-        {value}
-      </span>
     </div>
   )
 }
 
 // ── Main tab component ───────────────────────────────────────────────
 
+function getTs(row: Record<string, unknown>): string {
+  const ts =
+    row.ts ??
+    (row.gps as Record<string, unknown>)?.timestamp ??
+    (row.sensor as Record<string, unknown>)?.timestamp ??
+    ""
+  return String(ts)
+}
+
+function getBestAction(row: Record<string, unknown>): string {
+  const d = row.decision ?? row
+  const r = d as Record<string, unknown>
+  const v =
+    r.best_action ??
+    r.recommended_action ??
+    row.best_action ??
+    row.recommended_action
+  if (v == null) return ""
+  return String(v).trim() || ""
+}
+
 export function EnvironmentalImpact() {
-  const [cargoTons, setCargoTons] = useState(DEFAULT_CARGO_TONS)
-  const [carbonPrice, setCarbonPrice] = useState(EPA_CARBON_MULTIPLIER)
-  const [showSettings, setShowSettings] = useState(false)
+  const { data: allRows, loading: rowsLoading } = useAllFleetRows(60000)
 
-  const { data, loading } = useEnvironmentalData(0.5, 5_000, cargoTons, carbonPrice)
+  const envSummary = useMemo(() => {
+    if (!allRows || !Array.isArray(allRows)) return null
+    return computeEnvDiffsSummary(allRows)
+  }, [allRows])
 
-  // Fleet-wide totals
-  const totals = useMemo(() => {
-    if (!data.length) return null
-    let co2 = 0,
-      envVal = 0,
-      spoilVal = 0,
-      susVal = 0
-    for (const t of data) {
-      co2 += t.total_tonnes_carbon_saved
-      envVal += t.environmental_value
-      spoilVal += t.expected_spoilage_cost_saved
-      susVal += t.total_sustainability_value
+  // Group allRows by truck_id: sum diffs from all rows, use latest row for current_node/chosen_next
+  const truckList = useMemo((): TruckEnvRow[] => {
+    if (!allRows || !Array.isArray(allRows)) return []
+    const byTruck = new Map<
+      number,
+      {
+        diff_env_cost_2: number
+        diff_environmental_value: number
+        diff_env_spoilage_cost: number
+        latestRow: Record<string, unknown>
+      }
+    >()
+    for (const row of allRows) {
+      const raw = row as Record<string, unknown>
+      const tid = Number(raw.truck_id)
+      if (!Number.isFinite(tid)) continue
+      const diffs = computeEnvDiffsForRow(raw)
+      const existing = byTruck.get(tid)
+      const ts = getTs(raw)
+      const newSum = {
+        diff_env_cost_2: (existing?.diff_env_cost_2 ?? 0) + diffs.diff_env_cost_2,
+        diff_environmental_value:
+          (existing?.diff_environmental_value ?? 0) + diffs.diff_environmental_value,
+        diff_env_spoilage_cost:
+          (existing?.diff_env_spoilage_cost ?? 0) + diffs.diff_env_spoilage_cost,
+        latestRow:
+          !existing || ts > getTs(existing.latestRow) ? raw : existing.latestRow,
+      }
+      byTruck.set(tid, newSum)
     }
-    return {
-      co2,
-      envVal,
-      spoilVal,
-      susVal,
-      count: data.length,
-    }
-  }, [data])
-
-  // Sort trucks: those with savings first, then by sustainability value desc
-  const sorted = useMemo(
-    () =>
-      [...data].sort(
-        (a, b) => b.total_sustainability_value - a.total_sustainability_value
-      ),
-    [data]
-  )
+    return Array.from(byTruck.entries())
+      .map(([truck_id, agg]) => ({
+        truck_id,
+        best_action: getBestAction(agg.latestRow),
+        diff_env_cost_2: agg.diff_env_cost_2,
+        diff_environmental_value: agg.diff_environmental_value,
+        diff_env_spoilage_cost: agg.diff_env_spoilage_cost,
+      }))
+      .sort((a, b) => b.diff_env_cost_2 - a.diff_env_cost_2)
+  }, [allRows])
 
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
-            Environmental Impact
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {loading
-              ? "Computing sustainability metrics…"
-              : `${data.length} trucks · baseline vs risk-optimal action`}
-          </p>
-        </div>
-        <button
-          onClick={() => setShowSettings(!showSettings)}
-          className={cn(
-            "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
-            showSettings
-              ? "bg-primary/10 border-primary text-primary"
-              : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
-          )}
-        >
-          <Settings2 className="h-4 w-4" />
-          Parameters
-        </button>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">
+          Environmental Impact
+        </h1>
       </div>
 
-      {/* Settings panel */}
-      {showSettings && (
-        <Card className="border-primary/30 bg-primary/5">
-          <CardContent className="p-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">
-                  Cargo Weight (tons per truck)
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={80}
-                  step={1}
-                  value={cargoTons}
-                  onChange={(e) =>
-                    setCargoTons(Math.max(1, parseFloat(e.target.value) || 1))
-                  }
-                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm tabular-nums"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground">
-                  Carbon Shadow Price ($/metric ton CO₂)
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={1000}
-                  step={10}
-                  value={carbonPrice}
-                  onChange={(e) =>
-                    setCarbonPrice(Math.max(1, parseFloat(e.target.value) || 1))
-                  }
-                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm tabular-nums"
-                />
-                <p className="mt-1 text-[10px] text-muted-foreground">
-                  EPA default: $190/tCO₂. Adjust to see sensitivity.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Loading skeleton */}
-      {loading && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+      {(rowsLoading || !envSummary) && (
+        <div className="grid gap-4 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
             <Card key={i} className="border-border shadow-sm animate-pulse">
               <CardContent className="p-5 h-24" />
             </Card>
@@ -458,56 +286,82 @@ export function EnvironmentalImpact() {
         </div>
       )}
 
-      {/* Summary cards */}
-      {totals && (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <SummaryCard
-            label="Total CO₂ Saved"
-            value={fmtTonnes(totals.co2)}
-            sub={`Across ${totals.count} trucks`}
-            icon={Leaf}
-            color="success"
-          />
-          <SummaryCard
-            label="Environmental Value"
-            value={fmt$(totals.envVal)}
-            sub={`@ $${carbonPrice}/tCO₂`}
-            icon={TrendingDown}
-            color="success"
-          />
-          <SummaryCard
-            label="Spoilage Cost Saved"
-            value={fmt$(totals.spoilVal)}
-            sub="Baseline → optimal"
-            icon={DollarSign}
-            color="primary"
-          />
-          <SummaryCard
-            label="Total Sustainability Value"
-            value={fmt$(totals.susVal)}
-            sub="Environmental + Spoilage"
-            icon={Gauge}
-            color="info"
-          />
+      {/* Top tile: diff_env_cost_2 */}
+      {envSummary && (
+        <Card className="border-border shadow-sm">
+          <CardContent className="p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">
+                  Total Environmental Cost Difference
+                </p>
+                <p className="mt-2 text-4xl font-bold tracking-tight text-success">
+                  {fmt$(envSummary.diff_env_cost_2)}
+                </p>
+              </div>
+              <div className="rounded-xl bg-success/10 p-3">
+                <Leaf className="h-6 w-6 text-success" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Second row: diff_environmental_value and diff_env_spoilage_cost */}
+      {envSummary && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Card className="border-border shadow-sm">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Environmental Value
+                  </p>
+                  <p className="mt-1 text-2xl font-bold tracking-tight text-foreground">
+                    {fmt$(envSummary.diff_environmental_value)}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-success/10 p-2.5">
+                  <Leaf className="h-5 w-5 text-success" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-border shadow-sm">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Spoilage Cost
+                  </p>
+                  <p className="mt-1 text-2xl font-bold tracking-tight text-foreground">
+                    {fmt$(envSummary.diff_env_spoilage_cost)}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-success/10 p-2.5">
+                  <Leaf className="h-5 w-5 text-success" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
-      {/* Total Value Saved per Decision */}
-      {totals && totals.count > 0 && (
+      {/* Total Value Saved per Truck */}
+      {!rowsLoading && truckList.length > 0 && (
         <Card className="border-border shadow-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">
-              Total Value Saved per Decision
+              Environmental Cost Difference per Truck
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-[140px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={sorted.map((t) => ({
+                  data={truckList.map((t) => ({
                     name: `T${t.truck_id}`,
-                    value: t.total_sustainability_value,
-                    action: t.chosen_action,
+                    value: t.diff_env_cost_2,
                   }))}
                   barSize={16}
                 >
@@ -537,17 +391,11 @@ export function EnvironmentalImpact() {
                       borderRadius: "8px",
                       fontSize: "11px",
                     }}
-                    formatter={(value: number, _: string, props: any) => [
-                      fmt$(value),
-                      ACTION_LABELS[props.payload.action] ?? props.payload.action,
-                    ]}
+                    formatter={(value: number) => [fmt$(value), "Value"]}
                   />
-                  <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                    {sorted.map((t, idx) => (
-                      <Cell
-                        key={idx}
-                        fill={ACTION_COLORS[t.chosen_action] ?? "hsl(var(--muted))"}
-                      />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]} fill={BAR_GREEN}>
+                    {truckList.map((t, idx) => (
+                      <Cell key={idx} fill={BAR_GREEN} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -558,28 +406,27 @@ export function EnvironmentalImpact() {
       )}
 
       {/* Per-truck list */}
-      {!loading && data.length > 0 && (
+      {!rowsLoading && truckList.length > 0 && (
         <div>
           <div className="flex items-center gap-3 px-4 pb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground border-b border-border">
             <div className="w-4" />
             <div className="w-8" />
             <div className="min-w-[100px]">Truck</div>
-            <div>Action</div>
+            <div>Best Next Action</div>
             <div className="hidden sm:flex items-center gap-5 ml-auto">
-              <div className="w-[80px] text-right">CO₂</div>
               <div className="w-[70px] text-right">Value</div>
             </div>
           </div>
 
           <div className="mt-2 space-y-2">
-            {sorted.map((truck) => (
+            {truckList.map((truck) => (
               <TruckRow key={truck.truck_id} truck={truck} />
             ))}
           </div>
         </div>
       )}
 
-      {!loading && data.length === 0 && (
+      {!rowsLoading && truckList.length === 0 && (
         <Card className="border-border shadow-sm">
           <CardContent className="p-8 text-center text-muted-foreground">
             No fleet data available to compute environmental impact.
