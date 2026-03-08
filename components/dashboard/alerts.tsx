@@ -1,107 +1,18 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { AlertTriangle, CheckCircle, XCircle, Clock, Bell, Filter, Truck, AlertCircle, Info } from "lucide-react"
+import { AlertTriangle, Thermometer, Droplets, Bell, Clock, Truck } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useFleetData } from "@/hooks/use-fleet-data"
 
-interface Alert {
+interface AlertItem {
   id: string
-  type: "critical" | "warning" | "info" | "success"
+  type: "temp" | "humidity" | "door"
   title: string
   message: string
   truck: string
   time: string
-  acknowledged: boolean
-  autoResolved?: boolean
-}
-
-// Generate alerts from sensor data
-const generateAlertsFromData = (dbData?: any[]): Alert[] => {
-  const alerts: Alert[] = []
-  let alertId = 1
-
-  // Use database data if available
-  if (dbData && Array.isArray(dbData)) {
-    dbData.forEach((truck: any) => {
-      const sensor = truck.sensor
-      const gps = truck.gps
-      if (!sensor) return
-
-      const timeAgo = getTimeAgo(sensor.timestamp)
-      const truckId = truck.truck_id
-      const tempF = sensor.temperature_c
-      const humidityPct = parseFloat(sensor.humidity_pct) || 0
-
-      if (tempF > 64.4) {
-        alerts.push({
-          id: `A${String(alertId++).padStart(3, '0')}`,
-          type: "critical",
-          title: "High Temperature Alert",
-          message: `Temperature at ${tempF.toFixed(1)}°F - above 64.4°F threshold.`,
-          truck: `Truck ${truckId}`,
-          time: timeAgo,
-          acknowledged: false,
-        })
-      }
-
-      if (humidityPct >= 90) {
-        alerts.push({
-          id: `A${String(alertId++).padStart(3, '0')}`,
-          type: "critical",
-          title: "Critical Humidity Level",
-          message: `Humidity at ${humidityPct.toFixed(1)}% - critical threshold reached.`,
-          truck: `Truck ${truckId}`,
-          time: timeAgo,
-          acknowledged: false,
-        })
-      }
-      else if (humidityPct >= 80) {
-        alerts.push({
-          id: `A${String(alertId++).padStart(3, '0')}`,
-          type: "warning",
-          title: "High Humidity Warning",
-          message: `Humidity at ${humidityPct.toFixed(1)}% - above 80% threshold.`,
-          truck: `Truck ${truckId}`,
-          time: timeAgo,
-          acknowledged: false,
-        })
-      }
-
-      // Warning: Door open
-      if (sensor.door_open) {
-        alerts.push({
-          id: `A${String(alertId++).padStart(3, '0')}`,
-          type: "warning",
-          title: "Door Open",
-          message: `Cargo door is currently open.`,
-          truck: `Truck ${truckId}`,
-          time: timeAgo,
-          acknowledged: false,
-        })
-      }
-
-      // Info: Low speed (< 5 mph) and not at node
-      if (gps && gps.speed_mph < 5 && !gps.at_node) {
-        alerts.push({
-          id: `A${String(alertId++).padStart(3, '0')}`,
-          type: "info",
-          title: "Vehicle Stopped",
-          message: `Truck has stopped at location ${gps.latitude.toFixed(4)}, ${gps.longitude.toFixed(4)}.`,
-          truck: `Truck ${truckId}`,
-          time: timeAgo,
-          acknowledged: true,
-        })
-      }
-    })
-  }
-
-  return alerts.sort((a, b) => {
-    return b.id.localeCompare(a.id)
-  })
 }
 
 const getTimeAgo = (timestamp: string): string => {
@@ -113,331 +24,239 @@ const getTimeAgo = (timestamp: string): string => {
 
   if (diffMins < 1) return "Just now"
   if (diffMins < 60) return `${diffMins} min ago`
-  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
-  return `${Math.floor(diffHours / 24)} day${Math.floor(diffHours / 24) > 1 ? 's' : ''} ago`
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? "s" : ""} ago`
+  return `${Math.floor(diffHours / 24)} day${Math.floor(diffHours / 24) > 1 ? "s" : ""} ago`
 }
 
-const alertConfig = {
-  critical: {
-    icon: XCircle,
-    label: "Critical",
-    bgClass: "bg-destructive/5 border-destructive/20",
-    iconClass: "text-destructive",
-    badgeClass: "bg-destructive/10 text-destructive border-destructive/30",
-  },
-  warning: {
-    icon: AlertTriangle,
-    label: "Warning",
-    bgClass: "bg-warning/5 border-warning/20",
-    iconClass: "text-warning",
-    badgeClass: "bg-warning/10 text-warning border-warning/30",
-  },
-  info: {
-    icon: Info,
-    label: "Info",
-    bgClass: "bg-info/5 border-info/20",
-    iconClass: "text-info",
-    badgeClass: "bg-info/10 text-info border-info/30",
-  },
-  success: {
-    icon: CheckCircle,
-    label: "Resolved",
-    bgClass: "bg-success/5 border-success/20",
-    iconClass: "text-success",
-    badgeClass: "bg-success/10 text-success border-success/30",
-  },
+// Generate alerts from sensor data: temp > 64.4, humidity > 90, door_open only
+const generateAlertsFromData = (dbData?: any[]): AlertItem[] => {
+  const alerts: AlertItem[] = []
+  let alertId = 1
+
+  if (dbData && Array.isArray(dbData)) {
+    dbData.forEach((truck: any) => {
+      const sensor = truck.sensor
+      if (!sensor) return
+
+      const timeAgo = getTimeAgo(sensor.timestamp)
+      const truckId = truck.truck_id
+      const temp = sensor.temperature_c
+      const humidityPct = parseFloat(sensor.humidity_pct) || 0
+
+      if (temp > 64.4) {
+        alerts.push({
+          id: `A${String(alertId++).padStart(3, "0")}`,
+          type: "temp",
+          title: "High Temperature Alert",
+          message: `Temperature at ${temp.toFixed(1)}°F (exceeds 64.4°F threshold)`,
+          truck: `Truck ${truckId}`,
+          time: timeAgo,
+        })
+      }
+
+      if (humidityPct > 90) {
+        alerts.push({
+          id: `A${String(alertId++).padStart(3, "0")}`,
+          type: "humidity",
+          title: "Critical Humidity Level",
+          message: `Humidity at ${humidityPct.toFixed(1)}% (exceeds 90% threshold)`,
+          truck: `Truck ${truckId}`,
+          time: timeAgo,
+        })
+      }
+
+      if (sensor.door_open) {
+        alerts.push({
+          id: `A${String(alertId++).padStart(3, "0")}`,
+          type: "door",
+          title: "Door Open",
+          message: `Truck door is currently open`,
+          truck: `Truck ${truckId}`,
+          time: timeAgo,
+        })
+      }
+    })
+  }
+
+  return alerts.sort((a, b) => b.id.localeCompare(a.id))
 }
 
 export function Alerts() {
-  // Fetch real-time fleet data from database (polls every 60 seconds)
-  const { data: dbFleetData, loading } = useFleetData(undefined, 60000)
-  
-  const [filter, setFilter] = useState<string>("all")
-  
-  // Generate initial alerts
-  const initialAlerts = useMemo(() => {
-    return generateAlertsFromData(dbFleetData ? (Array.isArray(dbFleetData) ? dbFleetData : [dbFleetData]) : undefined)
-  }, [dbFleetData])
-  
-  const [alerts, setAlerts] = useState<Alert[]>(initialAlerts)
-  
-  // Update alerts when data changes
-  useEffect(() => {
-    if (dbFleetData) {
-      setAlerts(generateAlertsFromData(Array.isArray(dbFleetData) ? dbFleetData : [dbFleetData]))
+  const { data: dbFleetData } = useFleetData(undefined, 60000)
+  const fleetArray = dbFleetData ? (Array.isArray(dbFleetData) ? dbFleetData : [dbFleetData]) : []
+
+  const stats = useMemo(() => {
+    const tempTruckIds = new Set<number>()
+    const humidityTruckIds = new Set<number>()
+    const doorOpenTruckIds = new Set<number>()
+
+    fleetArray.forEach((truck: any) => {
+      const sensor = truck.sensor
+      if (!sensor) return
+
+      const temp = sensor.temperature_c
+      const humidityPct = parseFloat(sensor.humidity_pct) || 0
+
+      if (temp > 64.4) tempTruckIds.add(truck.truck_id)
+      if (humidityPct > 90) humidityTruckIds.add(truck.truck_id)
+      if (sensor.door_open) doorOpenTruckIds.add(truck.truck_id)
+    })
+
+    const total =
+      tempTruckIds.size + humidityTruckIds.size + doorOpenTruckIds.size
+
+    return {
+      total,
+      tempTrucks: tempTruckIds.size,
+      humidityTrucks: humidityTruckIds.size,
+      doorOpenTrucks: doorOpenTruckIds.size,
     }
-  }, [dbFleetData])
+  }, [fleetArray])
 
-  // Auto-resolve alerts when conditions normalize
-  useEffect(() => {
-    const checkAndResolveAlerts = () => {
-      setAlerts((prevAlerts) =>
-        prevAlerts.map((alert) => {
-          // Skip already acknowledged alerts
-          if (alert.acknowledged) return alert
-
-          // Get truck ID from alert
-          const truckId = parseInt(alert.truck.replace('Truck ', ''))
-          
-          if (dbFleetData && Array.isArray(dbFleetData)) {
-            const truck = dbFleetData.find((t: any) => t.truck_id === truckId)
-            if (!truck?.sensor) return alert
-            
-            const sensor = truck.sensor
-            const humidityPct = parseFloat(sensor.humidity_pct) || 0
-            
-            if (alert.message.includes('Temperature') && sensor.temperature_c <= 64.4) {
-              return { ...alert, acknowledged: true, type: "success" as const, autoResolved: true }
-            }
-
-            if (alert.message.includes('Critical Humidity') && humidityPct < 90) {
-              return { ...alert, acknowledged: true, type: "success" as const, autoResolved: true }
-            }
-            
-            if (alert.message.includes('High Humidity Warning') && humidityPct < 80) {
-              return { ...alert, acknowledged: true, type: "success" as const, autoResolved: true }
-            }
-
-            if (alert.message.includes('Door') && !sensor.door_open) {
-              return { ...alert, acknowledged: true, type: "success" as const, autoResolved: true }
-            }
-          }
-
-          return alert
-        })
-      )
-    }
-
-    // Check on mount and every 5 seconds
-    checkAndResolveAlerts()
-    const interval = setInterval(checkAndResolveAlerts, 5000)
-    
-    return () => clearInterval(interval)
-  }, [dbFleetData])
-
-  const filteredAlerts = alerts.filter((alert) => {
-    if (filter === "all") return true
-    if (filter === "unacknowledged") return !alert.acknowledged
-    return alert.type === filter
-  })
-
-  const handleAcknowledge = (id: string) => {
-    setAlerts((prev) =>
-      prev.map((alert) =>
-        alert.id === id ? { ...alert, acknowledged: true, type: "success" as const } : alert
-      )
-    )
-  }
-
-  const criticalCount = alerts.filter((a) => a.type === "critical" && !a.acknowledged).length
-  const warningCount = alerts.filter((a) => a.type === "warning" && !a.acknowledged).length
-  const infoCount = alerts.filter((a) => a.type === "info" && !a.acknowledged).length
-  const unacknowledgedCount = alerts.filter((a) => !a.acknowledged).length
+  const alerts = useMemo(
+    () => generateAlertsFromData(fleetArray.length ? fleetArray : undefined),
+    [fleetArray]
+  )
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">Telemetry Alerts</h1>
-        </div>
-        <Badge 
-          variant="outline" 
-          className={cn(
-            "w-fit",
-            unacknowledgedCount > 0 
-              ? "border-destructive/30 bg-destructive/10 text-destructive" 
-              : "border-success/30 bg-success/10 text-success"
-          )}
-        >
-          <Bell className="mr-1.5 h-3.5 w-3.5" />
-          {unacknowledgedCount} Unread
-        </Badge>
-      </div>
+      <h1 className="text-3xl font-bold tracking-tight text-foreground">
+        Telemetry Alerts
+      </h1>
 
-      {/* Stats Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Row 1: Total alerts - full width, red */}
+      <Card className="border-destructive/30 bg-destructive/5 shadow-sm">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-destructive/80">Total Alerts</p>
+              <p className="mt-2 text-4xl font-bold text-destructive">
+                {stats.total}
+              </p>
+            </div>
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-destructive/10">
+              <Bell className="h-7 w-7 text-destructive" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Row 2: Three tiles */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
         <Card className="border-border shadow-sm">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Alerts</p>
-                <p className="mt-1 text-3xl font-bold text-foreground">{alerts.length}</p>
-              </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
-                <Bell className="h-6 w-6 text-muted-foreground" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-destructive/20 bg-destructive/5 shadow-sm">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-destructive/80">Critical</p>
-                <p className="mt-1 text-3xl font-bold text-destructive">{criticalCount}</p>
+                <p className="text-sm text-muted-foreground">
+                  Temperature &gt; 64.4°F
+                </p>
+                <p className="mt-1 text-3xl font-bold text-foreground">
+                  {stats.tempTrucks}
+                </p>
+                <p className="text-xs text-muted-foreground">trucks</p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-destructive/10">
-                <XCircle className="h-6 w-6 text-destructive" />
+                <Thermometer className="h-6 w-6 text-destructive" />
               </div>
             </div>
           </CardContent>
         </Card>
-
-        <Card className="border-warning/20 bg-warning/5 shadow-sm">
+        <Card className="border-border shadow-sm">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-warning/80">Warnings</p>
-                <p className="mt-1 text-3xl font-bold text-warning">{warningCount}</p>
+                <p className="text-sm text-muted-foreground">Humidity &gt; 90%</p>
+                <p className="mt-1 text-3xl font-bold text-foreground">
+                  {stats.humidityTrucks}
+                </p>
+                <p className="text-xs text-muted-foreground">trucks</p>
               </div>
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-warning/10">
-                <AlertTriangle className="h-6 w-6 text-warning" />
+                <Droplets className="h-6 w-6 text-warning" />
               </div>
             </div>
           </CardContent>
         </Card>
-
-        <Card className="border-success/20 bg-success/5 shadow-sm">
+        <Card className="border-border shadow-sm">
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-success/80">Resolved</p>
-                <p className="mt-1 text-3xl font-bold text-success">
-                  {alerts.filter((a) => a.acknowledged).length}
+                <p className="text-sm text-muted-foreground">Door Open</p>
+                <p className="mt-1 text-3xl font-bold text-foreground">
+                  {stats.doorOpenTrucks}
                 </p>
+                <p className="text-xs text-muted-foreground">trucks</p>
               </div>
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-success/10">
-                <CheckCircle className="h-6 w-6 text-success" />
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-info/10">
+                <AlertTriangle className="h-6 w-6 text-info" />
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filter Buttons */}
-      <div className="flex flex-wrap items-center gap-2">
-        {[
-          { id: "all", label: "All", count: alerts.length },
-          { id: "unacknowledged", label: "Unread", count: unacknowledgedCount },
-          { id: "critical", label: "Critical", count: criticalCount },
-          { id: "warning", label: "Warnings", count: warningCount },
-          { id: "info", label: "Info", count: infoCount },
-        ].map((item) => (
-          <Button
-            key={item.id}
-            variant={filter === item.id ? "default" : "outline"}
-            size="sm"
-            onClick={() => setFilter(item.id)}
-            className={cn(
-              "gap-2",
-              filter === item.id 
-                ? "bg-primary text-primary-foreground shadow-md shadow-primary/25" 
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {item.label}
-            <Badge 
-              variant="secondary" 
-              className={cn(
-                "h-5 px-1.5 text-[10px]",
-                filter === item.id ? "bg-primary-foreground/20 text-primary-foreground" : ""
-              )}
-            >
-              {item.count}
-            </Badge>
-          </Button>
-        ))}
-      </div>
-
-      {/* Alerts List */}
+      {/* Row 3: All alerts list - no resolve */}
       <Card className="border-border shadow-sm">
         <CardHeader className="pb-4">
-          <CardTitle className="flex items-center gap-2 text-lg font-semibold">
-            <Filter className="h-5 w-5 text-muted-foreground" />
-            {filter === "all" ? "All Alerts" : filter.charAt(0).toUpperCase() + filter.slice(1)}
-            <span className="text-sm font-normal text-muted-foreground">({filteredAlerts.length})</span>
-          </CardTitle>
+          <CardTitle className="text-lg font-semibold">All Alerts</CardTitle>
         </CardHeader>
         <CardContent>
-          {filteredAlerts.length === 0 ? (
+          {alerts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-success/10">
-                <CheckCircle className="h-8 w-8 text-success" />
+                <Bell className="h-8 w-8 text-success" />
               </div>
-              <h3 className="mt-4 text-lg font-semibold text-foreground">All Clear</h3>
-              <p className="mt-1 text-sm text-muted-foreground">No alerts match the current filter</p>
+              <h3 className="mt-4 text-lg font-semibold text-foreground">
+                All Clear
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                No alerts at this time
+              </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {filteredAlerts.map((alert, index) => {
-                const config = alertConfig[alert.type]
-                const Icon = config.icon
-                return (
+            <ul className="space-y-2">
+              {alerts.map((alert) => (
+                <li
+                  key={alert.id}
+                  className="flex items-start gap-4 rounded-lg border border-border/60 p-4 py-3"
+                >
                   <div
-                    key={alert.id}
                     className={cn(
-                      "relative flex flex-col gap-4 rounded-xl border p-4 transition-all sm:flex-row sm:items-start",
-                      config.bgClass,
-                      alert.acknowledged && "opacity-60"
+                      "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+                      alert.type === "temp" && "bg-destructive/10",
+                      alert.type === "humidity" && "bg-warning/10",
+                      alert.type === "door" && "bg-info/10"
                     )}
-                    style={{ animationDelay: `${index * 0.03}s` }}
                   >
-                    {/* Icon */}
-                    <div className={cn(
-                      "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
-                      alert.type === "critical" && "bg-destructive/10",
-                      alert.type === "warning" && "bg-warning/10",
-                      alert.type === "info" && "bg-info/10",
-                      alert.type === "success" && "bg-success/10"
-                    )}>
-                      <Icon className={cn("h-5 w-5", config.iconClass)} />
-                    </div>
-                    
-                    {/* Content */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <p className="font-semibold text-foreground">{alert.title}</p>
-                        <Badge variant="outline" className={config.badgeClass}>
-                          {config.label}
-                        </Badge>
-                        {alert.acknowledged && (
-                          <Badge variant="outline" className="bg-success/10 text-success border-success/30">
-                            <CheckCircle className="mr-1 h-3 w-3" />
-                            {alert.autoResolved ? "Auto-Resolved" : "Acknowledged"}
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-3">{alert.message}</p>
-                      <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1.5">
-                          <Truck className="h-3.5 w-3.5" />
-                          {alert.truck}
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <Clock className="h-3.5 w-3.5" />
-                          {alert.time}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Action */}
-                    {!alert.acknowledged && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleAcknowledge(alert.id)}
-                        className="shrink-0 bg-card hover:bg-muted"
-                      >
-                        <CheckCircle className="mr-1.5 h-4 w-4" />
-                        Acknowledge
-                      </Button>
+                    {alert.type === "temp" && (
+                      <Thermometer className="h-5 w-5 text-destructive" />
+                    )}
+                    {alert.type === "humidity" && (
+                      <Droplets className="h-5 w-5 text-warning" />
+                    )}
+                    {alert.type === "door" && (
+                      <AlertTriangle className="h-5 w-5 text-info" />
                     )}
                   </div>
-                )
-              })}
-            </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-foreground">{alert.title}</p>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      {alert.message}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <Truck className="h-3.5 w-3.5" />
+                        {alert.truck}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5" />
+                        {alert.time}
+                      </span>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
         </CardContent>
       </Card>

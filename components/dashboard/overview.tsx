@@ -89,7 +89,7 @@ export function Overview({ onNavigate }: OverviewProps) {
     }
   }, [dbFleetData, dbStats])
 
-  // Cost data: SUM over ALL rows (allRows from DB). Backend: flat decisions; Next.js: FleetListEntry with decision nested.
+  // Cost data: SUM over ALL rows. Uses direct columns: continue_mean_operating etc. or fallback to mean_cost_components.
   const costSavingsSummary = useMemo(() => {
     if (!allRows || !Array.isArray(allRows)) return null
     let sumDiffTotal = 0
@@ -98,21 +98,40 @@ export function Overview({ onNavigate }: OverviewProps) {
       const d = row.decision ?? row
       sumDiffTotal += Number(d?.diff_max_min_total_cost ?? 0)
 
-      const actions = d?.all_actions ?? []
-      const byAction = Object.fromEntries(
-        actions.map((a: any) => [a.action?.toLowerCase?.() ?? a.action, a])
-      )
-      const cont = byAction["continue"], reroute = byAction["reroute"], detour = byAction["detour"]
-      const compC = cont?.mean_cost_components
-      const compR = reroute?.mean_cost_components
-      const compD = detour?.mean_cost_components
-      if (compC && compR && compD) {
-        const opC = compC.operating_travel ?? 0, opR = compR.operating_travel ?? 0, opD = compD.operating_travel ?? 0
-        const dC = compC.delay_service ?? 0, dR = compR.delay_service ?? 0, dD = compD.delay_service ?? 0
-        const sC = compC.spoilage ?? 0, sR = compR.spoilage ?? 0, sD = compD.spoilage ?? 0
+      // Prefer direct columns: continue_mean_operating, reroute_mean_operating, detour_mean_operating, etc.
+      const opC = Number(d?.continue_mean_operating ?? 0)
+      const opR = Number(d?.reroute_mean_operating ?? 0)
+      const opD = Number(d?.detour_mean_operating ?? 0)
+      const dC = Number(d?.continue_mean_delay ?? 0)
+      const dR = Number(d?.reroute_mean_delay ?? 0)
+      const dD = Number(d?.detour_mean_delay ?? 0)
+      const sC = Number(d?.continue_mean_spoilage ?? 0)
+      const sR = Number(d?.reroute_mean_spoilage ?? 0)
+      const sD = Number(d?.detour_mean_spoilage ?? 0)
+
+      const hasDirect = opC || opR || opD || dC || dR || dD || sC || sR || sD
+      if (hasDirect) {
         sumDiffOp += Math.max(opC, opR, opD) - Math.min(opC, opR, opD)
         sumDiffDelay += Math.max(dC, dR, dD) - Math.min(dC, dR, dD)
         sumDiffSpoilage += Math.max(sC, sR, sD) - Math.min(sC, sR, sD)
+      } else {
+        // Fallback: mean_cost_components from all_actions
+        const actions = d?.all_actions ?? []
+        const byAction = Object.fromEntries(
+          actions.map((a: any) => [a.action?.toLowerCase?.() ?? a.action, a])
+        )
+        const cont = byAction["continue"], reroute = byAction["reroute"], detour = byAction["detour"]
+        const compC = cont?.mean_cost_components
+        const compR = reroute?.mean_cost_components
+        const compD = detour?.mean_cost_components
+        if (compC && compR && compD) {
+          const oc = compC.operating_travel ?? 0, or = compR.operating_travel ?? 0, od = compD.operating_travel ?? 0
+          const dc = compC.delay_service ?? 0, dr = compR.delay_service ?? 0, dd = compD.delay_service ?? 0
+          const sc = compC.spoilage ?? 0, sr = compR.spoilage ?? 0, sd = compD.spoilage ?? 0
+          sumDiffOp += Math.max(oc, or, od) - Math.min(oc, or, od)
+          sumDiffDelay += Math.max(dc, dr, dd) - Math.min(dc, dr, dd)
+          sumDiffSpoilage += Math.max(sc, sr, sd) - Math.min(sc, sr, sd)
+        }
       }
     }
     return {
@@ -130,16 +149,39 @@ export function Overview({ onNavigate }: OverviewProps) {
     let totalMeanCost = 0, totalOp = 0, totalDelay = 0, totalSpoilage = 0
     for (const row of allRows) {
       const d = row.decision ?? row
-      const rec = d?.recommended_action?.toLowerCase?.()
-      const actions = d?.all_actions ?? []
-      const chosen = actions.find((a: any) => (a.action?.toLowerCase?.() ?? a.action) === rec)
-      const meanCost = d?.mean_cost ?? chosen?.mean_cost ?? 0
+      const rec = (d?.recommended_action ?? d?.best_action ?? "continue")?.toString().toLowerCase?.()
+      const meanCost =
+        d?.mean_cost ?? d?.mean_total_cost ?? d?.best_mean_cost ?? 0
       totalMeanCost += Number(meanCost)
-      const comp = chosen?.mean_cost_components
-      if (comp) {
-        totalOp += comp.operating_travel ?? 0
-        totalDelay += comp.delay_service ?? 0
-        totalSpoilage += comp.spoilage ?? 0
+      // Prefer direct columns per action
+      let op = 0, del = 0, spoil = 0
+      if (rec === "continue") {
+        op = Number(d?.continue_mean_operating ?? 0)
+        del = Number(d?.continue_mean_delay ?? 0)
+        spoil = Number(d?.continue_mean_spoilage ?? 0)
+      } else if (rec === "reroute") {
+        op = Number(d?.reroute_mean_operating ?? 0)
+        del = Number(d?.reroute_mean_delay ?? 0)
+        spoil = Number(d?.reroute_mean_spoilage ?? 0)
+      } else if (rec === "detour") {
+        op = Number(d?.detour_mean_operating ?? 0)
+        del = Number(d?.detour_mean_delay ?? 0)
+        spoil = Number(d?.detour_mean_spoilage ?? 0)
+      }
+      const hasDirect = op || del || spoil
+      if (hasDirect) {
+        totalOp += op
+        totalDelay += del
+        totalSpoilage += spoil
+      } else {
+        const actions = d?.all_actions ?? []
+        const chosen = actions.find((a: any) => (a.action?.toLowerCase?.() ?? a.action) === rec)
+        const comp = chosen?.mean_cost_components
+        if (comp) {
+          totalOp += comp.operating_travel ?? 0
+          totalDelay += comp.delay_service ?? 0
+          totalSpoilage += comp.spoilage ?? 0
+        }
       }
     }
     return {
@@ -152,6 +194,17 @@ export function Overview({ onNavigate }: OverviewProps) {
     }
   }, [allRows])
 
+  function normalizeTo100(v0: number, v1: number, v2: number): [number, number, number] {
+    const arr = [v0, v1, v2]
+    const sum = arr.reduce((a, b) => a + b, 0)
+    const delta = sum - 100
+    if (delta !== 0) {
+      const idx = arr.indexOf(Math.max(...arr))
+      arr[idx] = Math.max(0, arr[idx] - delta)
+    }
+    return [arr[0], arr[1], arr[2]]
+  }
+
   const costDisplayData = useMemo(() => {
     const items = [
       { name: 'Operating & Travel', color: 'hsl(var(--primary))' },
@@ -161,10 +214,15 @@ export function Overview({ onNavigate }: OverviewProps) {
     if (costView === "savings" && costSavingsSummary && costSavingsSummary.sumDiffTotal > 0) {
       const t = costSavingsSummary.sumDiffTotal
       if (costSavingsSummary.hasBreakdown) {
+        const [v0, v1, v2] = normalizeTo100(
+          Math.round((costSavingsSummary.sumDiffOp / t) * 100),
+          Math.round((costSavingsSummary.sumDiffDelay / t) * 100),
+          Math.round((costSavingsSummary.sumDiffSpoilage / t) * 100),
+        )
         return [
-          { ...items[0], value: Math.round((costSavingsSummary.sumDiffOp / t) * 100), useGreenBar: true },
-          { ...items[1], value: Math.round((costSavingsSummary.sumDiffDelay / t) * 100), useGreenBar: true },
-          { ...items[2], value: Math.round((costSavingsSummary.sumDiffSpoilage / t) * 100), useGreenBar: true },
+          { ...items[0], value: v0, useGreenBar: true },
+          { ...items[1], value: v1, useGreenBar: true },
+          { ...items[2], value: v2, useGreenBar: true },
         ]
       }
       return [{ name: 'Total', color: 'hsl(var(--primary))', value: 100, useGreenBar: true }]
@@ -172,17 +230,11 @@ export function Overview({ onNavigate }: OverviewProps) {
     if (costView === "mean" && costMeanSummary && costMeanSummary.totalMeanCost > 0) {
       const t = costMeanSummary.totalMeanCost
       if (costMeanSummary.hasBreakdown) {
-        let v0 = Math.round((costMeanSummary.totalOp / t) * 100)
-        let v1 = Math.round((costMeanSummary.totalDelay / t) * 100)
-        let v2 = Math.round((costMeanSummary.totalSpoilage / t) * 100)
-        const sum = v0 + v1 + v2
-        const delta = sum - 100
-        if (delta !== 0) {
-          const idx = [v0, v1, v2].indexOf(Math.max(v0, v1, v2))
-          if (idx === 0) v0 = Math.max(0, v0 - delta)
-          else if (idx === 1) v1 = Math.max(0, v1 - delta)
-          else v2 = Math.max(0, v2 - delta)
-        }
+        const [v0, v1, v2] = normalizeTo100(
+          Math.round((costMeanSummary.totalOp / t) * 100),
+          Math.round((costMeanSummary.totalDelay / t) * 100),
+          Math.round((costMeanSummary.totalSpoilage / t) * 100),
+        )
         return [
           { ...items[0], value: v0, useGreenBar: true },
           { ...items[1], value: v1, useGreenBar: true },
@@ -473,15 +525,15 @@ export function Overview({ onNavigate }: OverviewProps) {
                     <span className="text-sm text-muted-foreground">{item.name}</span>
                     <span className="text-sm font-semibold tabular-nums text-foreground">{item.value}%</span>
                   </div>
-                  <div className="relative h-5 w-full rounded-full bg-muted overflow-hidden">
+                  <div className="relative h-5 w-full rounded-full overflow-hidden border border-border/40 bg-transparent">
                     <div
                       className={cn(
-                        "absolute inset-y-0 left-0 rounded-full transition-all duration-500",
-                        item.useGreenBar ? "bg-success" : ""
+                        "absolute inset-y-0 left-0 rounded-l-full transition-all duration-500",
+                        item.useGreenBar ? "bg-success" : "bg-muted"
                       )}
                       style={{
                         width: `${item.value}%`,
-                        ...(!item.useGreenBar ? { backgroundColor: item.color } : {}),
+                        ...(item.value === 100 ? { borderRadius: "9999px" } : {}),
                       }}
                     />
                   </div>
@@ -503,42 +555,46 @@ export function Overview({ onNavigate }: OverviewProps) {
             <div className="mb-4">
               <p className="text-3xl font-bold text-success">
                 {envSummary != null
-                  ? `$${envSummary.sumDiffTotal >= 1000 ? `${(envSummary.sumDiffTotal / 1000).toFixed(1)}k` : Math.round(envSummary.sumDiffTotal).toLocaleString()}`
+                  ? `$${envSummary.envVal >= 1000 ? `${(envSummary.envVal / 1000).toFixed(1)}k` : Math.round(envSummary.envVal).toLocaleString()}`
                   : '—'}
               </p>
-              {envSummary != null && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  diff_max_min_total_cost: {envSummary.sumDiffTotal.toLocaleString()} · diff_environmental_value: {envSummary.envVal.toLocaleString()} · diff_env_spoilage_cost: {envSummary.spoilVal.toLocaleString()}
-                </p>
-              )}
             </div>
             <div className="space-y-3">
               {(() => {
                 if (!envSummary) return null
-                const items = [
-                  { label: 'Environmental Value', value: envSummary.envVal },
-                  { label: 'Spoilage Cost Saved', value: envSummary.spoilVal },
-                ]
                 const total = envSummary.envVal + envSummary.spoilVal
-                return items.map((item, idx) => {
-                  const pct = total > 0 ? Math.round((item.value / total) * 100) : 0
-                  return (
-                    <div key={idx}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-sm text-muted-foreground">{item.label}</span>
-                        <span className="text-sm font-semibold tabular-nums text-foreground">
-                          ${item.value >= 1000 ? `${(item.value / 1000).toFixed(1)}k` : item.value.toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="relative h-5 w-full rounded-full bg-muted overflow-hidden">
-                        <div
-                          className="absolute inset-y-0 left-0 rounded-full transition-all duration-500 bg-success"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
+                let pctEnv = total > 0 ? Math.round((envSummary.envVal / total) * 100) : 0
+                let pctSpoil = total > 0 ? Math.round((envSummary.spoilVal / total) * 100) : 0
+                const sum = pctEnv + pctSpoil
+                if (sum !== 100 && (pctEnv > 0 || pctSpoil > 0)) {
+                  const delta = sum - 100
+                  if (pctEnv >= pctSpoil) {
+                    pctEnv = Math.max(0, pctEnv - delta)
+                  } else {
+                    pctSpoil = Math.max(0, pctSpoil - delta)
+                  }
+                }
+                const items = [
+                  { label: 'Environmental Value', value: envSummary.envVal, pct: pctEnv },
+                  { label: 'Spoilage Cost Saved', value: envSummary.spoilVal, pct: pctSpoil },
+                ]
+                return items.map((item, idx) => (
+                  <div key={idx}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm text-muted-foreground">{item.label}</span>
+                      <span className="text-sm font-semibold tabular-nums text-foreground">{item.pct}%</span>
                     </div>
-                  )
-                })
+                    <div className="relative h-5 w-full rounded-full overflow-hidden border border-border/40 bg-transparent">
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-l-full transition-all duration-500 bg-success"
+                        style={{
+                          width: `${item.pct}%`,
+                          ...(item.pct === 100 ? { borderRadius: "9999px" } : {}),
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))
               })()}
             </div>
           </CardContent>

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Backend Data Table</title>
+  <style>
+    body { font-family: system-ui; padding: 16px; }
+    input { width: 400px; padding: 8px; margin-right: 8px; }
+    button { padding: 8px 16px; cursor: pointer; }
+    table { border-collapse: collapse; margin-top: 16px; font-size: 13px; }
+    th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; }
+    th { background: #f5f5f5; position: sticky; top: 0; }
+    .scroll { max-height: 80vh; overflow: auto; }
+    .error { color: #c00; }
+    .count { color: #666; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Backend Data Table</h1>
+  <p>Enter your Render backend URL (e.g. https://your-app.onrender.com)</p>
+  <input type="url" id="url" placeholder="https://your-app.onrender.com">
+  <button onclick="fetchTable()">Load Table</button>
+  <div id="status"></div>
+  <div class="scroll">
+    <table id="table"></table>
+  </div>
+  <div id="count" class="count"></div>
+
+  <script>
+    async function fetchTable() {
+      const urlInput = document.getElementById('url').value.trim()
+      const base = urlInput.replace(/\/$/, '')
+      const apiUrl = base ? `${base}/api/fleet-data` : ''
+      const status = document.getElementById('status')
+      const countEl = document.getElementById('count')
+      const tableEl = document.getElementById('table')
+
+      if (!apiUrl) {
+        status.innerHTML = '<span class="error">Enter a URL first</span>'
+        return
+      }
+
+      status.textContent = 'Loading...'
+      tableEl.innerHTML = ''
+
+      try {
+        const res = await fetch(apiUrl)
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error || res.statusText)
+
+        const rows = Array.isArray(json.rows) ? json.rows : []
+        if (rows.length === 0) {
+          status.textContent = 'No rows returned'
+          countEl.textContent = ''
+          return
+        }
+
+        const cols = [...new Set(rows.flatMap(r => Object.keys(r)))]
+        let html = '<thead><tr>' + cols.map(c => `<th>${c}</th>`).join('') + '</tr></thead><tbody>'
+        for (const row of rows) {
+          html += '<tr>' + cols.map(c => `<td>${formatCell(row[c])}</td>`).join('') + '</tr>'
+        }
+        html += '</tbody>'
+        tableEl.innerHTML = html
+        status.textContent = 'Loaded'
+        countEl.textContent = `${rows.length} rows`
+      } catch (e) {
+        status.innerHTML = `<span class="error">${e.message}</span>`
+        countEl.textContent = ''
+      }
+    }
+
+    function formatCell(v) {
+      if (v == null) return ''
+      if (typeof v === 'object') return JSON.stringify(v).slice(0, 80) + (JSON.stringify(v).length > 80 ? '...' : '')
+      return String(v)
+    }
+  </script>
+</body>
+</html>
