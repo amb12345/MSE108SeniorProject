@@ -28,10 +28,10 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { id: "home", label: "Home", icon: BarChart3, description: "Overview & metrics" },
-  { id: "telemetry", label: "Telemetry Alerts", icon: Activity, description: "Sensor data" },
-  { id: "costs", label: "Optimization", icon: DollarSign, description: "Cost optimization" },
-  { id: "environmental", label: "Environmental Impact", icon: Leaf, description: "Sustainability metrics" },
+  { id: "home", label: "Home", icon: BarChart3 },
+  { id: "telemetry", label: "Telemetry Alerts", icon: Activity },
+  { id: "costs", label: "Optimization", icon: DollarSign },
+  { id: "environmental", label: "Environmental Impact", icon: Leaf },
 ]
 
 export function Sidebar({
@@ -144,16 +144,7 @@ export function Sidebar({
                   "h-5 w-5 shrink-0 transition-transform duration-200",
                   isActive && "scale-110"
                 )} />
-                {!collapsed && (
-                  <div className="flex flex-col items-start">
-                    <span>{item.label}</span>
-                    {!isActive && (
-                      <span className="text-[10px] font-normal text-white/60 opacity-0 transition-opacity group-hover:opacity-100">
-                        {item.description}
-                      </span>
-                    )}
-                  </div>
-                )}
+                {!collapsed && <span>{item.label}</span>}
 
                 {isActive && (
                   <div className="absolute right-0 top-1/2 h-8 w-1 -translate-y-1/2 translate-x-1.5 rounded-l-full bg-white/50" />
