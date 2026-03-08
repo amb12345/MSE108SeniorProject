@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { fetchFleetFromAiven } from '@/lib/fleet-from-aiven'
 
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-static'
 
 /**
  * Returns ALL rows from fleet_decisions_full_6 (no deduplication by truck).

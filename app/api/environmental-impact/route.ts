@@ -5,7 +5,7 @@ import {
 import { DEFAULT_CARGO_TONS, EPA_CARBON_MULTIPLIER } from '@/lib/constants'
 import { fetchFleetListFromAiven } from '@/lib/fleet-from-aiven'
 
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-static'
 
 export async function GET(request: Request) {
   if (!process.env.DATABASE_URL) {
