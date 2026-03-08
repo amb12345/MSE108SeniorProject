@@ -145,7 +145,7 @@ function TruckRow({ truck }: { truck: TruckEnvRow }) {
                 <span className="text-sm text-muted-foreground">
                   Spoilage Cost
                 </span>
-                <span className="text-sm font-semibold tabular-nums text-foreground">
+                <span className="text-sm font-semibold tabular-nums text-success">
                   {fmt$(truck.diff_env_spoilage_cost)}
                 </span>
               </div>

@@ -583,7 +583,7 @@ export function Overview({ onNavigate }: OverviewProps) {
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-sm text-muted-foreground">{item.label}</span>
                       <span className="text-sm font-semibold tabular-nums text-foreground">
-                        {item.pct}%
+                        ${Math.round(item.value).toLocaleString()}
                       </span>
                     </div>
                     <div className="relative h-5 w-full rounded-full overflow-hidden border border-border/40 bg-transparent">
