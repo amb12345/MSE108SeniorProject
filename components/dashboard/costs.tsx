@@ -324,7 +324,7 @@ function TruckRow({
 
       {isExpanded && (
         <div className="border-t border-border bg-muted/20 px-4 py-4">
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-4xl">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 w-full px-4">
             {/* Pathway details */}
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
