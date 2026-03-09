@@ -9,6 +9,11 @@ import {
   Zap,
   Scale,
   Truck,
+  ChevronDown,
+  ChevronUp,
+  Thermometer,
+  Droplets,
+  DoorOpen,
 } from "lucide-react"
 import { useFleetData, useAllFleetRows } from "@/hooks/use-fleet-data"
 import type { FleetTruckData } from "@/hooks/use-fleet-data"
@@ -32,20 +37,21 @@ function formatCostFull(value: number): string {
 function getBestAction(truck: FleetTruckData): string {
   const d = truck.decision
   if (!d) return ""
-  return (
-    (d as Record<string, unknown>).best_action ??
-    d.recommended_action ??
-    ""
-  ).toString().trim()
+  const r = d as Record<string, unknown>
+  const best = r.best_action
+  if (best != null && String(best).trim() !== "") {
+    return String(best).trim()
+  }
+  return (d.recommended_action ?? "").toString().trim()
 }
 
 function getMeanCost(truck: FleetTruckData): number {
   const d = truck.decision
   if (!d) return 0
   return (
+    Number((d as Record<string, unknown>).mean_total_cost) ??
     Number((d as Record<string, unknown>).best_mean_cost) ??
     Number(d.mean_cost) ??
-    Number((d as Record<string, unknown>).mean_total_cost) ??
     0
   )
 }
@@ -56,6 +62,62 @@ function getCurrentNode(truck: FleetTruckData): number | string {
     (truck.sensor as Record<string, unknown>)?.current_node
   if (n == null) return "—"
   return Number(n)
+}
+
+function getChosenNext(truck: FleetTruckData): number | string {
+  const r = truck.decision?.route as Record<string, unknown> | undefined
+  const n = truck.gps?.next_node ?? r?.chosen_next ?? r?.next_node
+  if (n == null) return "—"
+  return Number(n)
+}
+
+function getOptionCost(truck: FleetTruckData, action: string): number {
+  const val = getOptionCostOrNull(truck, action)
+  return val ?? 0
+}
+
+function getOptionCostOrNull(truck: FleetTruckData, action: string): number | null {
+  const d = truck.decision as Record<string, unknown> | null
+  if (!d) return null
+  const key =
+    action === "continue"
+      ? "continue_mean_total"
+      : action === "detour"
+        ? "detour_mean_total"
+        : action === "reroute"
+          ? "reroute_mean_total"
+          : null
+  if (key && d[key] != null) return Number(d[key])
+  const actions = (d.all_actions ?? []) as Array<{ action?: string; mean_cost?: number }>
+  const match = actions.find((a) => (a.action?.toLowerCase?.() ?? "") === action)
+  if (match?.mean_cost != null) return Number(match.mean_cost)
+  return null
+}
+
+function formatOptionCost(truck: FleetTruckData, action: string): string {
+  const val = getOptionCostOrNull(truck, action)
+  if (val == null) return "N/A"
+  return formatCostFull(val)
+}
+
+function getEffectiveChosenAction(
+  truck: FleetTruckData,
+  riskThreshold: number
+): string {
+  const bestAction = getBestAction(truck).toLowerCase().trim()
+  if (riskThreshold >= 0.5) {
+    return bestAction === "continue" || bestAction === "detour" || bestAction === "reroute"
+      ? bestAction
+      : "continue"
+  }
+  const costs = [
+    { key: "continue", cost: getOptionCostOrNull(truck, "continue") },
+    { key: "detour", cost: getOptionCostOrNull(truck, "detour") },
+    { key: "reroute", cost: getOptionCostOrNull(truck, "reroute") },
+  ].filter((x) => x.cost != null) as { key: string; cost: number }[]
+  if (costs.length === 0) return bestAction || "continue"
+  const max = costs.reduce((a, b) => (a.cost >= b.cost ? a : b))
+  return max.key
 }
 
 // ── Cost summary from allRows (matches Home Total Costs) ─────────────────
@@ -107,128 +169,259 @@ function computeCostMeanSummary(rows: unknown[]) {
   return { totalMeanCost, totalOp, totalDelay, totalSpoilage }
 }
 
-// ── Summary tiles: Total Cost + 3 breakdown tiles ──────────────────────
+// ── Summary tiles: Total Cost (row 1) + 3 breakdown tiles (row 2) ────────
 
 function CostSummaryTiles({ summary }: { summary: NonNullable<ReturnType<typeof computeCostMeanSummary>> }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 max-w-4xl mx-auto">
-      <Card className="border-border shadow-sm">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-primary/10 p-2">
-              <DollarSign className="h-4 w-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total Cost</p>
-              <p className="text-lg font-bold tabular-nums text-foreground">
-                {formatCostFull(summary.totalMeanCost)}
-              </p>
-            </div>
+    <div className="max-w-4xl mx-auto space-y-4">
+      {/* Row 1: Total Cost - large, full width, light gray background */}
+      <div className="rounded-lg bg-muted/50 p-6">
+        <div className="flex items-center gap-3">
+          <div className="rounded-lg bg-primary/10 p-3">
+            <DollarSign className="h-6 w-6 text-primary" />
           </div>
-        </CardContent>
-      </Card>
-      <Card className="border-border shadow-sm">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-primary/10 p-2">
-              <DollarSign className="h-4 w-4 text-primary" />
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Operating & Travel</p>
-              <p className="text-lg font-bold tabular-nums text-foreground">
-                {formatCostFull(summary.totalOp)}
-              </p>
-            </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Total Cost</p>
+            <p className="text-2xl sm:text-3xl font-bold tabular-nums text-foreground">
+              {formatCostFull(summary.totalMeanCost)}
+            </p>
           </div>
-        </CardContent>
-      </Card>
-      <Card className="border-border shadow-sm">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-warning/10 p-2">
-              <DollarSign className="h-4 w-4 text-warning" />
+        </div>
+      </div>
+
+      {/* Row 2: Breakdown tiles */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Card className="border-border shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-primary/10 p-2">
+                <DollarSign className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Operating & Travel</p>
+                <p className="text-lg font-bold tabular-nums text-foreground">
+                  {formatCostFull(summary.totalOp)}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Delay & Service</p>
-              <p className="text-lg font-bold tabular-nums text-foreground">
-                {formatCostFull(summary.totalDelay)}
-              </p>
+          </CardContent>
+        </Card>
+        <Card className="border-border shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-warning/10 p-2">
+                <DollarSign className="h-4 w-4 text-warning" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Delay & Service</p>
+                <p className="text-lg font-bold tabular-nums text-foreground">
+                  {formatCostFull(summary.totalDelay)}
+                </p>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
-      <Card className="border-border shadow-sm">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-lg bg-destructive/10 p-2">
-              <DollarSign className="h-4 w-4 text-destructive" />
+          </CardContent>
+        </Card>
+        <Card className="border-border shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-destructive/10 p-2">
+                <DollarSign className="h-4 w-4 text-destructive" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Spoilage</p>
+                <p className="text-lg font-bold tabular-nums text-foreground">
+                  {formatCostFull(summary.totalSpoilage)}
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Spoilage</p>
-              <p className="text-lg font-bold tabular-nums text-foreground">
-                {formatCostFull(summary.totalSpoilage)}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
 
-// ── Truck row (simple, from DB) ──────────────────────────────────────
+// ── Truck row with expandable details ────────────────────────────────
 
-function TruckRow({ truck }: { truck: FleetTruckData }) {
+function TruckRow({
+  truck,
+  isExpanded,
+  onToggle,
+  riskThreshold,
+}: {
+  truck: FleetTruckData
+  isExpanded: boolean
+  onToggle: () => void
+  riskThreshold: number
+}) {
   const bestAction = getBestAction(truck)
-  const meanCost = getMeanCost(truck)
+  const effectiveAction = getEffectiveChosenAction(truck, riskThreshold)
+  const displayedCost = getOptionCostOrNull(truck, effectiveAction) ?? getMeanCost(truck)
   const currentNode = getCurrentNode(truck)
+  const chosenNext = getChosenNext(truck)
 
-  const doorOpen = truck.sensor?.door_open ?? false
+  const doorOpen = Boolean(truck.sensor?.door_open)
   const humidityPct = Number(truck.sensor?.humidity_pct ?? 0)
-  const tempC = Number(truck.sensor?.temperature_c ?? 0)
+  const tempF = Number(truck.sensor?.temperature_c ?? 0)
 
   const flags: string[] = []
   if (doorOpen) flags.push("door")
   if (humidityPct > 90) flags.push("humid")
-  if (tempC > 64.4) flags.push("temp")
+  if (tempF > 64.4) flags.push("temp")
 
   const actionLabel =
-    bestAction ? ACTION_LABELS[bestAction.toLowerCase()] ?? bestAction : "—"
+    effectiveAction ? ACTION_LABELS[effectiveAction.toLowerCase()] ?? effectiveAction : "—"
+
+  const chosenActionKey = effectiveAction?.toLowerCase?.() ?? "continue"
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 border-b border-border last:border-b-0 hover:bg-muted/30">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-        <Truck className="h-4 w-4 text-primary" />
-      </div>
-
-      <div className="min-w-[100px]">
-        <p className="text-sm font-semibold text-foreground">Truck {truck.truck_id}</p>
-        <p className="text-[10px] text-muted-foreground">Node {currentNode}</p>
-      </div>
-
-      <Badge variant="outline" className="shrink-0">
-        {actionLabel}
-      </Badge>
-
-      <div className="ml-auto flex items-center gap-4 text-xs">
-        <div className="text-right min-w-[80px]">
-          <span className="font-semibold tabular-nums text-foreground">
-            {formatCostFull(meanCost)}
-          </span>
+    <div className="border-b border-border last:border-b-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="grid w-full grid-cols-4 items-center gap-4 px-4 py-3 text-left hover:bg-muted/30"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+            <Truck className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Truck {truck.truck_id}</p>
+            <p className="text-[10px] text-muted-foreground">Node {currentNode}</p>
+          </div>
         </div>
-        {flags.length > 0 && (
-          <div className="flex items-center gap-1.5 min-w-[100px]">
-            {flags.map((f) => (
+
+        <div>
+          <Badge variant="outline" className="font-normal">
+            {actionLabel}
+          </Badge>
+        </div>
+
+        <div className="text-left font-semibold tabular-nums text-foreground text-xs">
+          {formatCostFull(displayedCost)}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5 justify-end">
+          {flags.length > 0 ? (
+            flags.map((f) => (
               <span
                 key={f}
-                className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                className="rounded bg-destructive/15 px-1.5 py-0.5 text-[10px] font-medium text-destructive"
               >
                 {f}
               </span>
-            ))}
+            ))
+          ) : (
+            <span className="text-muted-foreground/50">—</span>
+          )}
+          {isExpanded ? (
+            <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          )}
+        </div>
+      </button>
+
+      {isExpanded && (
+        <div className="border-t border-border bg-muted/20 px-4 py-4">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 max-w-4xl">
+            {/* Pathway details */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Pathway Details
+              </p>
+              <div className="rounded-md bg-background p-3 text-sm">
+                <p>
+                  <span className="font-medium">Path:</span>{" "}
+                  <span className="tabular-nums">{currentNode}</span> →{" "}
+                  <span className="tabular-nums">{chosenNext}</span>
+                </p>
+                <p className="mt-1">
+                  <span className="font-medium">
+                    {riskThreshold >= 0.5 ? "Best action" : "Chosen (most expensive)"}:
+                  </span>{" "}
+                  {actionLabel}
+                </p>
+              </div>
+            </div>
+
+            {/* Alerts (green if ok, red if alert) */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Alerts
+              </p>
+              <div className="space-y-2">
+                <div
+                  className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm ${
+                    tempF > 64.4 ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success"
+                  }`}
+                >
+                  <Thermometer className="h-4 w-4 shrink-0" />
+                  <span>
+                    temperature: <span className="tabular-nums font-medium">{tempF.toFixed(1)}°F</span>
+                    {tempF > 64.4 && " (alert)"}
+                  </span>
+                </div>
+                <div
+                  className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm ${
+                    humidityPct > 90 ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success"
+                  }`}
+                >
+                  <Droplets className="h-4 w-4 shrink-0" />
+                  <span>
+                    humidity: <span className="tabular-nums font-medium">{humidityPct}%</span>
+                    {humidityPct > 90 && " (alert)"}
+                  </span>
+                </div>
+                <div
+                  className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm ${
+                    doorOpen ? "bg-destructive/15 text-destructive" : "bg-success/15 text-success"
+                  }`}
+                >
+                  <DoorOpen className="h-4 w-4 shrink-0" />
+                  <span>
+                    door {doorOpen ? "open" : "closed"}
+                    {doorOpen && " (alert)"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Options and chosen */}
+            <div className="space-y-2 sm:col-span-2 lg:col-span-1">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Options
+              </p>
+              <div className="space-y-2">
+                {[
+                  { key: "continue", label: "Continue" },
+                  { key: "detour", label: "Detour" },
+                  { key: "reroute", label: "Reroute" },
+                ].map(({ key, label }) => {
+                  const isChosen = key === chosenActionKey
+                  const costStr = formatOptionCost(truck, key)
+                  return (
+                    <div
+                      key={key}
+                      className={`rounded-md px-3 py-2 text-sm ${
+                        isChosen
+                          ? "bg-primary/15 font-medium text-primary ring-1 ring-primary/30"
+                          : "bg-background text-muted-foreground"
+                      }`}
+                    >
+                      <span>{label}</span>{" "}
+                      <span className="tabular-nums font-medium">
+                        {costStr}
+                        {isChosen && " ✓"}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -237,6 +430,7 @@ function TruckRow({ truck }: { truck: FleetTruckData }) {
 
 export function Costs() {
   const [riskThreshold, setRiskThreshold] = useState(0.5)
+  const [expandedTruckId, setExpandedTruckId] = useState<number | null>(null)
 
   const { data: fleetData, loading, error } = useFleetData()
   const { data: allRows } = useAllFleetRows(60000)
@@ -283,25 +477,32 @@ export function Costs() {
         <CostSummaryTiles summary={costSummary} />
       )}
 
-      {/* Risk Threshold - no Simulations */}
+      {/* Risk Threshold - choose action highlighting rule */}
       <Card className="border-border shadow-sm max-w-xl mx-auto">
         <CardContent className="p-4">
           <p className="mb-2 text-xs font-medium text-muted-foreground">
             Risk Threshold
           </p>
-          <div className="inline-flex rounded-lg bg-muted p-1">
+          <div
+            role="group"
+            aria-label="Risk threshold options"
+            className="inline-flex rounded-lg bg-muted p-1 gap-1"
+          >
             {RISK_OPTIONS.map((opt) => {
               const isActive = riskThreshold === opt.value
               const Icon = opt.icon
               return (
                 <button
                   key={opt.value}
+                  type="button"
                   onClick={() => setRiskThreshold(opt.value)}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-medium transition-all ${
+                  className={`flex items-center gap-1.5 rounded-md px-4 py-2.5 text-xs font-medium transition-all ${
                     isActive
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                      ? "bg-background text-foreground shadow-sm ring-1 ring-border"
+                      : "text-muted-foreground hover:text-foreground hover:bg-background/50"
                   }`}
+                  aria-pressed={isActive}
+                  aria-label={`${opt.label}${isActive ? ", selected" : ""}`}
                 >
                   <Icon className="h-3.5 w-3.5" />
                   {opt.label}
@@ -323,21 +524,28 @@ export function Costs() {
         <Card className="border-border shadow-sm overflow-hidden">
           <CardHeader className="pb-2 px-4 pt-4">
             <CardTitle className="text-sm font-semibold">
-              Per-Truck Cost Breakdown
+              Per-Truck Breakdown
             </CardTitle>
-            <div className="mt-3 flex items-center gap-3 px-4 pb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground border-b border-border">
-              <div className="w-8" />
-              <div className="min-w-[100px]">Truck</div>
+            <div className="mt-3 grid grid-cols-4 items-center gap-4 px-4 pb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground border-b border-border">
+              <div>Truck</div>
               <div>Action</div>
-              <div className="ml-auto flex items-center gap-4">
-                <div className="w-[80px] text-right">Mean Cost</div>
-                <div className="w-[100px]">Flags</div>
-              </div>
+              <div className="text-left">Mean Cost</div>
+              <div>Flags</div>
             </div>
           </CardHeader>
           <CardContent className="p-0">
             {fleetList.map((truck) => (
-              <TruckRow key={truck.truck_id} truck={truck} />
+              <TruckRow
+                key={truck.truck_id}
+                truck={truck}
+                isExpanded={expandedTruckId === truck.truck_id}
+                onToggle={() =>
+                  setExpandedTruckId((id) =>
+                    id === truck.truck_id ? null : truck.truck_id
+                  )
+                }
+                riskThreshold={riskThreshold}
+              />
             ))}
           </CardContent>
         </Card>

@@ -137,11 +137,14 @@ function rowToExtracts(row: Record<string, unknown>): {
     truck_id: row.truck_id,
     timestamp: ts,
     recommended_action: recommended,
+    best_action: row.best_action ?? recommended,
     mean_cost: meanCost,
     route,
     all_actions: allActions,
   }
   for (const key of [
+    "mean_total_cost",
+    "best_action",
     "total_tonnes_carbon_saved",
     "environmental_value",
     "expected_spoilage_cost_saved",
@@ -254,10 +257,15 @@ function transformRawRowsToBackendState(
         decision: latestDecision
           ? {
               recommended_action: latestDecision.recommended_action ?? "",
+              best_action: latestDecision.best_action ?? latestDecision.recommended_action ?? "",
               mean_cost: Number(latestDecision.mean_cost ?? 0),
+              mean_total_cost: Number(latestDecision.mean_total_cost ?? latestDecision.mean_cost ?? 0),
               timestamp: String(latestDecision.timestamp ?? ""),
               route: latestDecision.route,
               all_actions: latestDecision.all_actions ?? undefined,
+              continue_mean_total: latestDecision.continue_mean_total ?? undefined,
+              reroute_mean_total: latestDecision.reroute_mean_total ?? undefined,
+              detour_mean_total: latestDecision.detour_mean_total ?? undefined,
               total_tonnes_carbon_saved: latestDecision.total_tonnes_carbon_saved ?? undefined,
               environmental_value: latestDecision.environmental_value ?? undefined,
               expected_spoilage_cost_saved:
