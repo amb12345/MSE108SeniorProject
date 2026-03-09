@@ -338,7 +338,7 @@ function TruckRow({
                 </p>
                 <p className="mt-1">
                   <span className="font-medium">
-                    {riskThreshold >= 0.5 ? "Best action" : "Chosen (most expensive)"}:
+                    Best action:
                   </span>{" "}
                   {actionLabel}
                 </p>
