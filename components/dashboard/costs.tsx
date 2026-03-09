@@ -173,7 +173,7 @@ function computeCostMeanSummary(rows: unknown[]) {
 
 function CostSummaryTiles({ summary }: { summary: NonNullable<ReturnType<typeof computeCostMeanSummary>> }) {
   return (
-    <div className="max-w-4xl mx-auto space-y-4">
+    <div className="w-full space-y-4">
       {/* Row 1: Total Cost - large, full width, light gray background */}
       <div className="rounded-lg bg-muted/50 p-6">
         <div className="flex items-center gap-3">
@@ -478,7 +478,7 @@ export function Costs() {
       )}
 
       {/* Risk Threshold - choose action highlighting rule */}
-      <Card className="border-border shadow-sm max-w-xl mx-auto">
+      <Card className="border-border shadow-sm overflow-hidden">
         <CardContent className="p-4">
           <p className="mb-2 text-xs font-medium text-muted-foreground">
             Risk Threshold
