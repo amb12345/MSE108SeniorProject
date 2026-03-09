@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { fleetToCostResults } from '@/lib/fleet-cost-adapter'
 
-export const dynamic = 'force-dynamic'
+export const dynamic = 'force-static'
 
 export async function GET() {
   if (!process.env.DATABASE_URL) {
